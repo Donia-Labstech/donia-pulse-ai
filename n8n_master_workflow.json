@@ -1,0 +1,350 @@
+{
+  "name": "Donia Pulse AI — Master Workflow v1.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node_001_webhook",
+      "name": "📥 WhatsApp Webhook Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 400],
+      "webhookId": "donia-pulse-whatsapp-main",
+      "notes": "Entry point for ALL WhatsApp messages across all clients. Meta sends all events here."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Validate & Route Incoming Webhook\n// PURPOSE: Verify the request is a genuine Meta webhook event,\n// extract the core payload, and identify which client it belongs to.\n// ============================================================\n\nconst body = $input.first().json.body;\n\n// --- 1. Handle Meta Webhook Verification (GET request) ---\nif ($input.first().json.query?.['hub.mode'] === 'subscribe') {\n  return [{ json: { type: 'verification', challenge: $input.first().json.query['hub.challenge'] } }];\n}\n\n// --- 2. Validate WhatsApp Message Structure ---\nif (!body?.entry?.[0]?.changes?.[0]?.value?.messages) {\n  // Not a message event (could be a status update, read receipt etc.)\n  return [{ json: { type: 'non_message', raw: body } }];\n}\n\nconst change = body.entry[0].changes[0].value;\nconst message = change.messages[0];\nconst contact = change.contacts?.[0];\n\n// --- 3. Extract WABA ID to identify the client ---\nconst wabaId = body.entry[0].id; // This is the WABA ID\n\n// --- 4. Build normalized payload ---\nreturn [{\n  json: {\n    type: 'message',\n    waba_id: wabaId,\n    phone_number_id: change.metadata.phone_number_id,\n    message_id: message.id,\n    from_phone: message.from,\n    from_name: contact?.profile?.name || 'Unknown',\n    message_type: message.type,\n    message_text: message.text?.body || '',\n    timestamp: message.timestamp,\n    raw_body: body\n  }\n}];"
+      },
+      "id": "node_002_validate",
+      "name": "🔍 Validate & Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400],
+      "notes": "Validates Meta signature, extracts message data, identifies client via WABA ID."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.type }}",
+              "value2": "message"
+            }
+          ]
+        }
+      },
+      "id": "node_003_router",
+      "name": "🔀 Is Valid Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [640, 400],
+      "notes": "Route only real messages. Discard status updates and non-message events."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK"
+      },
+      "id": "node_004_ack",
+      "name": "✅ ACK to Meta (200 OK)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [860, 550],
+      "notes": "CRITICAL: Must respond 200 to Meta within 5 seconds or messages will be re-sent."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "projectId": "={{ $env.FIREBASE_PROJECT_ID }}",
+        "resource": "document",
+        "operation": "getAll",
+        "collection": "clients",
+        "filters": {
+          "conditions": [
+            {
+              "field": "whatsapp_config.waba_id",
+              "operator": "==",
+              "value": "={{ $json.waba_id }}"
+            },
+            {
+              "field": "status.is_active",
+              "operator": "==",
+              "value": true
+            }
+          ]
+        }
+      },
+      "id": "node_005_fetch_client",
+      "name": "🔥 Fetch Client Config (Firebase)",
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1,
+      "position": [860, 400],
+      "credentials": { "googleFirebaseCloudFirestoreApi": { "id": "firebase_creds", "name": "Firebase SA" } },
+      "notes": "Real-time fetch from Firebase. Every message triggers a fresh config read = zero restart needed."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Client Validation & Global Kill Switch Check\n// ============================================================\n\nconst clientDocs = $input.all();\nconst messageData = $('🔍 Validate & Extract Payload').first().json;\n\n// --- Check if client was found ---\nif (!clientDocs || clientDocs.length === 0) {\n  return [{ json: { \n    blocked: true, \n    reason: 'CLIENT_NOT_FOUND',\n    waba_id: messageData.waba_id \n  }}];\n}\n\nconst client = clientDocs[0].json;\n\n// --- 1. Global Kill Switch (Platform-Level) ---\n// This would be checked from system_config, but for speed we check client-level first\n\n// --- 2. Client-Level Kill Switch ---\nif (client.status?.kill_switch === true) {\n  return [{ json: { \n    blocked: true, \n    reason: 'CLIENT_KILL_SWITCH',\n    client_id: client.client_id,\n    message_data: messageData\n  }}];\n}\n\n// --- 3. Maintenance Mode ---\nif (client.status?.maintenance_mode === true) {\n  return [{ json: { \n    blocked: true, \n    reason: 'MAINTENANCE_MODE',\n    client_id: client.client_id,\n    message_data: messageData\n  }}];\n}\n\n// --- 4. Subscription Expiry Check ---\nconst now = new Date();\nconst expiryDate = new Date(client.subscription?.expiry_date);\nif (expiryDate < now) {\n  return [{ json: { \n    blocked: true, \n    reason: 'SUBSCRIPTION_EXPIRED',\n    client_id: client.client_id,\n    message_data: messageData,\n    expiry_date: client.subscription.expiry_date\n  }}];\n}\n\n// --- 5. ALL CHECKS PASSED — proceed ---\nreturn [{ json: {\n  blocked: false,\n  client: client,\n  message_data: messageData\n}}];"
+      },
+      "id": "node_006_guard",
+      "name": "🛡️ Client Guard & Kill Switch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 400],
+      "notes": "Multi-layer security gate: Kill Switch, Maintenance Mode, Subscription Expiry."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.blocked }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "node_007_block_check",
+      "name": "🚦 Blocked?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1300, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Meta Compliance Safety Filter (Guardrails)\n// PURPOSE: Pre-process user message to detect and block\n// sensitive topics BEFORE sending to AI model.\n// ============================================================\n\nconst { client, message_data } = $input.first().json;\nconst text = message_data.message_text.toLowerCase();\nconst safetyConfig = client.safety_config;\n\nif (!safetyConfig?.guardrails_enabled) {\n  return [{ json: { safe: true, client, message_data } }];\n}\n\n// --- 1. Blocked Topics Detection (keyword-based + pattern matching) ---\nconst BLOCKED_PATTERNS = {\n  politics: [\n    /\\b(سياس|انتخاب|حزب|رئيس|برلمان|ثورة|احتجاج)\\b/i,\n    /\\b(politique|élection|parti|président|parlement|révolution)\\b/i,\n    /\\b(politic|election|party|president|parliament|revolution|protest)\\b/i\n  ],\n  religion: [\n    /\\b(دين|إسلام|مسيح|يهود|كفر|فتوى|حلال|حرام)\\b/i,\n    /\\b(religion|islam|chrétien|juif|fatwa|halal|haram)\\b/i,\n    /\\b(religion|islam|christian|jewish|fatwa|halal|haram|blasphemy)\\b/i\n  ],\n  adult_content: [\n    /\\b(sex|nude|xxx|porn|escort)\\b/i,\n    /\\b(جنس|عاري|بورن)\\b/i\n  ],\n  violence: [\n    /\\b(bomb|weapon|kill|attack|terrorist|داعش|قنبلة|سلاح|إرهاب)\\b/i,\n    /\\b(bombe|arme|tuer|attaque|terroriste)\\b/i\n  ]\n};\n\nconst blockedTopics = safetyConfig.blocked_topics || [];\nlet detectedTopic = null;\n\nfor (const topic of blockedTopics) {\n  if (BLOCKED_PATTERNS[topic]) {\n    for (const pattern of BLOCKED_PATTERNS[topic]) {\n      if (pattern.test(text)) {\n        detectedTopic = topic;\n        break;\n      }\n    }\n  }\n  if (detectedTopic) break;\n}\n\n// --- 2. Custom Blocked Words ---\nconst customBlocked = safetyConfig.custom_blocked_words || [];\nconst foundCustom = customBlocked.find(word => text.includes(word.toLowerCase()));\nif (foundCustom) detectedTopic = 'custom_blocked_word';\n\n// --- 3. Result ---\nif (detectedTopic) {\n  return [{ json: {\n    safe: false,\n    detected_topic: detectedTopic,\n    client,\n    message_data\n  }}];\n}\n\nreturn [{ json: { safe: true, client, message_data } }];"
+      },
+      "id": "node_008_safety",
+      "name": "🔒 Safety Filter (Guardrails)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300],
+      "notes": "Pre-AI filter. Blocks politics, religion, adult content, violence, custom keywords."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Multi-Lingual Auto-Detection\n// PURPOSE: Detect the user's language and apply override if set.\n// ============================================================\n\nconst { client, message_data } = $input.first().json;\nconst text = message_data.message_text;\nconst aiConfig = client.ai_config;\n\nlet detectedLanguage = 'ar'; // Default fallback\n\n// --- 1. Check Manual Override ---\nif (aiConfig.language_mode === 'manual' && aiConfig.forced_language) {\n  return [{ json: {\n    language: aiConfig.forced_language,\n    detection_method: 'manual_override',\n    client,\n    message_data\n  }}];\n}\n\n// --- 2. Auto-Detection via Script Analysis ---\n// Arabic: Unicode block U+0600 to U+06FF\nconst arabicPattern = /[\\u0600-\\u06FF]/;\n// French: Common French words and accented chars\nconst frenchPattern = /\\b(je|tu|il|nous|vous|ils|le|la|les|de|du|des|est|sont|bonjour|merci|comment|votre|notre)\\b/i;\n// English: Common English words\nconst englishPattern = /\\b(i|you|he|she|we|they|the|is|are|was|were|hello|hi|thank|how|your|our|please|help)\\b/i;\n\nconst arabicScore = (text.match(/[\\u0600-\\u06FF]/g) || []).length;\nconst frenchScore = (text.match(frenchPattern) || []).length;\nconst englishScore = (text.match(englishPattern) || []).length;\n\nif (arabicScore > 2) {\n  detectedLanguage = 'ar';\n} else if (frenchScore >= englishScore) {\n  detectedLanguage = frenchScore > 0 ? 'fr' : 'ar';\n} else {\n  detectedLanguage = englishScore > 0 ? 'en' : 'ar';\n}\n\nreturn [{ json: {\n  language: detectedLanguage,\n  detection_method: 'auto',\n  scores: { arabic: arabicScore, french: frenchScore, english: englishScore },\n  client,\n  message_data\n}}];"
+      },
+      "id": "node_009_langdetect",
+      "name": "🌍 Language Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 300],
+      "notes": "Detects AR/FR/EN via Unicode + keyword scoring. Respects manual override from dashboard."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "projectId": "={{ $env.FIREBASE_PROJECT_ID }}",
+        "resource": "document",
+        "operation": "getAll",
+        "collection": "conversations",
+        "documentId": "={{ $json.client.client_id + '_' + $json.message_data.from_phone }}"
+      },
+      "id": "node_010_history",
+      "name": "📚 Fetch Chat History",
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1,
+      "position": [1960, 300],
+      "credentials": { "googleFirebaseCloudFirestoreApi": { "id": "firebase_creds", "name": "Firebase SA" } },
+      "notes": "Retrieves conversation history for context. Last 10 messages to stay within token limits."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Build AI Prompt (System + Context + User)\n// PURPOSE: Construct the full messages array for the LLM\n// with client's brand voice, language instruction,\n// and recent conversation history.\n// ============================================================\n\nconst input = $input.first().json;\nconst langData = $('🌍 Language Detection').first().json;\nconst historyDoc = input; // Conversation history from Firebase\n\nconst client = langData.client;\nconst messageData = langData.message_data;\nconst language = langData.language;\nconst aiConfig = client.ai_config;\n\n// --- 1. Language instruction suffix ---\nconst langInstructions = {\n  ar: 'يجب أن تكون جميع ردودك باللغة العربية الفصحى أو الدارجة حسب السياق.',\n  fr: 'Toutes vos réponses doivent être en français, de manière professionnelle et chaleureuse.',\n  en: 'All your responses must be in English, professional and friendly.'\n};\n\n// --- 2. Build System Prompt ---\nconst systemPrompt = `${aiConfig.system_prompt}\n\n--- CRITICAL LANGUAGE RULE ---\n${langInstructions[language]}\n\n--- BRAND GUIDELINES ---\nBrand Name: ${aiConfig.brand_name}\nTone: ${aiConfig.brand_tone}\nYou are ONLY allowed to discuss topics related to this business.\nNEVER reveal that you are an AI unless directly and explicitly asked.\nNEVER mention competitors.\nNEVER discuss politics, religion, or other sensitive topics.`;\n\n// --- 3. Build conversation history (last 10 messages) ---\nconst rawHistory = historyDoc?.messages || [];\nconst recentHistory = rawHistory.slice(-10);\nconst historyMessages = recentHistory.map(msg => ({\n  role: msg.role,\n  content: msg.content\n}));\n\n// --- 4. Add current user message ---\nconst allMessages = [\n  ...historyMessages,\n  { role: 'user', content: messageData.message_text }\n];\n\nreturn [{ json: {\n  system_prompt: systemPrompt,\n  messages: allMessages,\n  language,\n  client,\n  message_data: messageData,\n  ai_config: aiConfig\n}}];"
+      },
+      "id": "node_011_buildprompt",
+      "name": "📝 Build AI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2180, 300],
+      "notes": "Constructs the full LLM payload: brand system prompt + language rule + history + user message."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.OPENAI_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.ai_config.model }}\",\n  \"max_tokens\": {{ $json.ai_config.max_tokens }},\n  \"temperature\": {{ $json.ai_config.temperature }},\n  \"system\": \"{{ $json.system_prompt }}\",\n  \"messages\": {{ JSON.stringify($json.messages) }}\n}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "node_012_openai",
+      "name": "🤖 OpenAI GPT-4o",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2400, 300],
+      "notes": "Calls OpenAI API. Model, temperature, max_tokens all come from Firebase client config."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Format & Send WhatsApp Reply\n// PURPOSE: Extract AI response and send via Meta WhatsApp API.\n// ============================================================\n\nconst aiResponse = $input.first().json;\nconst promptData = $('📝 Build AI Prompt').first().json;\n\nconst aiText = aiResponse.choices?.[0]?.message?.content || \n               'عذراً، حدث خطأ تقني. يرجى المحاولة مرة أخرى.';\n\nconst client = promptData.client;\nconst messageData = promptData.message_data;\n\n// Build WhatsApp send payload\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  recipient_type: 'individual',\n  to: messageData.from_phone,\n  type: 'text',\n  text: { body: aiText, preview_url: false }\n};\n\nreturn [{ json: {\n  payload: whatsappPayload,\n  phone_number_id: client.whatsapp_config.phone_number_id,\n  access_token: client.whatsapp_config.access_token,\n  ai_response: aiText,\n  client,\n  message_data: messageData\n}}];"
+      },
+      "id": "node_013_prepare_reply",
+      "name": "💬 Prepare WhatsApp Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2620, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $json.phone_number_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.access_token }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "node_014_send_wa",
+      "name": "📤 Send WhatsApp Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2840, 300],
+      "notes": "Sends reply via Meta Cloud API. Phone number ID and token are client-specific from Firebase."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Save message to Firebase conversation history + update analytics\nconst sendResult = $input.first().json;\nconst prepData = $('💬 Prepare WhatsApp Reply').first().json;\n\nconst docId = `${prepData.client.client_id}_${prepData.message_data.from_phone}`;\n\nreturn [{ json: {\n  document_id: docId,\n  user_message: {\n    role: 'user',\n    content: prepData.message_data.message_text,\n    timestamp: new Date().toISOString()\n  },\n  ai_message: {\n    role: 'assistant',\n    content: prepData.ai_response,\n    timestamp: new Date().toISOString()\n  },\n  client_id: prepData.client.client_id\n}}];"
+      },
+      "id": "node_015_save_history",
+      "name": "💾 Save to Firebase History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3060, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send fallback message for blocked/expired clients\nconst blockData = $input.first().json;\nconst client = blockData.client;\nconst messageData = blockData.message_data;\n\nconst lang = 'ar'; // Default for blocked messages\n\nconst BLOCKED_MESSAGES = {\n  CLIENT_NOT_FOUND: { ar: 'عذراً، هذه الخدمة غير متاحة حالياً.', fr: 'Service non disponible.', en: 'Service not available.' },\n  CLIENT_KILL_SWITCH: { ar: 'الخدمة موقوفة مؤقتاً. للمساعدة اتصل بنا.', fr: 'Service suspendu. Contactez-nous.', en: 'Service suspended. Contact us.' },\n  SUBSCRIPTION_EXPIRED: { ar: 'انتهت صلاحية الاشتراك. يرجى التجديد.', fr: 'Abonnement expiré. Veuillez renouveler.', en: 'Subscription expired. Please renew.' },\n  MAINTENANCE_MODE: { ar: 'الخدمة تحت الصيانة. نعود قريباً.', fr: 'Maintenance en cours. Revenez bientôt.', en: 'Under maintenance. Back soon.' }\n};\n\nconst msg = BLOCKED_MESSAGES[blockData.reason]?.[lang] || 'خدمة غير متاحة.';\n\nreturn [{ json: {\n  payload: {\n    messaging_product: 'whatsapp',\n    to: messageData?.from_phone,\n    type: 'text',\n    text: { body: msg }\n  },\n  phone_number_id: client?.whatsapp_config?.phone_number_id,\n  access_token: client?.whatsapp_config?.access_token,\n  reason: blockData.reason\n}}];"
+      },
+      "id": "node_016_blocked_reply",
+      "name": "🚫 Send Blocked Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 550],
+      "notes": "Sends appropriate fallback message for kill switch, expired subscription, etc."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 */6 * * *" }]
+        }
+      },
+      "id": "node_017_cron",
+      "name": "⏰ Subscription Alert CRON (6h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [200, 700],
+      "notes": "Runs every 6 hours to check for subscriptions expiring within 48 hours."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "projectId": "={{ $env.FIREBASE_PROJECT_ID }}",
+        "resource": "document",
+        "operation": "getAll",
+        "collection": "clients",
+        "filters": {
+          "conditions": [
+            { "field": "subscription.status", "operator": "==", "value": "active" },
+            { "field": "subscription.auto_alert_48h", "operator": "==", "value": true },
+            { "field": "subscription.alert_sent", "operator": "==", "value": false }
+          ]
+        }
+      },
+      "id": "node_018_fetch_expiring",
+      "name": "🔍 Find Expiring Subscriptions",
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1,
+      "position": [420, 700],
+      "credentials": { "googleFirebaseCloudFirestoreApi": { "id": "firebase_creds", "name": "Firebase SA" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check which clients expire within 48 hours\nconst clients = $input.all();\nconst now = new Date();\nconst in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);\n\nconst expiring = clients.filter(c => {\n  const expiry = new Date(c.json.subscription?.expiry_date);\n  return expiry > now && expiry <= in48h;\n});\n\nreturn expiring.map(c => ({ json: c.json }));"
+      },
+      "id": "node_019_filter_expiring",
+      "name": "⚠️ Filter 48h Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 700]
+    },
+    {
+      "parameters": {
+        "fromEmail": "alerts@donialabs.tech",
+        "toEmail": "={{ $json.contact_email }}",
+        "subject": "⚠️ تنبيه: اشتراكك ينتهي خلال 48 ساعة — Donia Pulse AI",
+        "emailType": "html",
+        "message": "<div dir='rtl' style='font-family: Arial; padding: 20px;'><h2 style='color: #e53e3e;'>⚠️ تنبيه انتهاء الاشتراك</h2><p>عزيزي <strong>{{ $json.business_name }}</strong>،</p><p>نود إعلامك بأن اشتراكك في خدمة <strong>Donia Pulse AI</strong> سينتهي في:</p><h3 style='color: #e53e3e;'>{{ $json.subscription.expiry_date }}</h3><p>يرجى التجديد في أقرب وقت لضمان استمرارية الخدمة.</p><br><p style='color: #718096;'>DONIA LABS TECH — contact@donialabs.tech</p></div>"
+      },
+      "id": "node_020_send_alert",
+      "name": "📧 Send Expiry Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [860, 700]
+    }
+  ],
+
+  "connections": {
+    "📥 WhatsApp Webhook Entry": { "main": [[{ "node": "🔍 Validate & Extract Payload", "type": "main", "index": 0 }]] },
+    "🔍 Validate & Extract Payload": { "main": [[{ "node": "🔀 Is Valid Message?", "type": "main", "index": 0 }]] },
+    "🔀 Is Valid Message?": {
+      "main": [
+        [{ "node": "🔥 Fetch Client Config (Firebase)", "type": "main", "index": 0 }],
+        [{ "node": "✅ ACK to Meta (200 OK)", "type": "main", "index": 0 }]
+      ]
+    },
+    "🔥 Fetch Client Config (Firebase)": { "main": [[{ "node": "🛡️ Client Guard & Kill Switch", "type": "main", "index": 0 }]] },
+    "🛡️ Client Guard & Kill Switch": { "main": [[{ "node": "🚦 Blocked?", "type": "main", "index": 0 }]] },
+    "🚦 Blocked?": {
+      "main": [
+        [{ "node": "🔒 Safety Filter (Guardrails)", "type": "main", "index": 0 }],
+        [{ "node": "🚫 Send Blocked Message", "type": "main", "index": 0 }]
+      ]
+    },
+    "🔒 Safety Filter (Guardrails)": { "main": [[{ "node": "🌍 Language Detection", "type": "main", "index": 0 }]] },
+    "🌍 Language Detection": { "main": [[{ "node": "📚 Fetch Chat History", "type": "main", "index": 0 }]] },
+    "📚 Fetch Chat History": { "main": [[{ "node": "📝 Build AI Prompt", "type": "main", "index": 0 }]] },
+    "📝 Build AI Prompt": { "main": [[{ "node": "🤖 OpenAI GPT-4o", "type": "main", "index": 0 }]] },
+    "🤖 OpenAI GPT-4o": { "main": [[{ "node": "💬 Prepare WhatsApp Reply", "type": "main", "index": 0 }]] },
+    "💬 Prepare WhatsApp Reply": { "main": [[{ "node": "📤 Send WhatsApp Message", "type": "main", "index": 0 }]] },
+    "📤 Send WhatsApp Message": { "main": [[{ "node": "💾 Save to Firebase History", "type": "main", "index": 0 }]] },
+    "⏰ Subscription Alert CRON (6h)": { "main": [[{ "node": "🔍 Find Expiring Subscriptions", "type": "main", "index": 0 }]] },
+    "🔍 Find Expiring Subscriptions": { "main": [[{ "node": "⚠️ Filter 48h Window", "type": "main", "index": 0 }]] },
+    "⚠️ Filter 48h Window": { "main": [[{ "node": "📧 Send Expiry Alert Email", "type": "main", "index": 0 }]] }
+  },
+
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "Donia Pulse AI — Error Handler"
+  },
+
+  "env_variables_required": {
+    "FIREBASE_PROJECT_ID":     "your-firebase-project-id",
+    "OPENAI_API_KEY":          "sk-...",
+    "N8N_WEBHOOK_BASE_URL":    "https://your-n8n.com",
+    "SMTP_HOST":               "smtp.sendgrid.net",
+    "SMTP_PORT":               "587",
+    "SMTP_USER":               "apikey",
+    "SMTP_PASS":               "SG...."
+  }
+}

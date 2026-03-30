@@ -1,0 +1,294 @@
+{
+  "name": "Donia Pulse AI — Arcee Workflow v2.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node_001_webhook",
+      "name": "📥 WhatsApp Webhook Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 400],
+      "webhookId": "donia-pulse-whatsapp-main"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Validate & Route Incoming Webhook\n// ============================================================\n\nconst body = $input.first().json.body;\n\n// Handle Meta Webhook Verification\nif ($input.first().json.query?.['hub.mode'] === 'subscribe') {\n  return [{ json: { type: 'verification', challenge: $input.first().json.query['hub.challenge'] } }];\n}\n\n// Validate WhatsApp Message Structure\nif (!body?.entry?.[0]?.changes?.[0]?.value?.messages) {\n  return [{ json: { type: 'non_message', raw: body } }];\n}\n\nconst change = body.entry[0].changes[0].value;\nconst message = change.messages[0];\nconst contact = change.contacts?.[0];\nconst wabaId = body.entry[0].id;\n\nreturn [{\n  json: {\n    type: 'message',\n    waba_id: wabaId,\n    phone_number_id: change.metadata.phone_number_id,\n    message_id: message.id,\n    from_phone: message.from,\n    from_name: contact?.profile?.name || 'Unknown',\n    message_type: message.type,\n    message_text: message.text?.body || '',\n    timestamp: message.timestamp\n  }\n}];"
+      },
+      "id": "node_002_validate",
+      "name": "🔍 Validate & Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.type }}", "value2": "message" }]
+        }
+      },
+      "id": "node_003_router",
+      "name": "🔀 Is Valid Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [640, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK"
+      },
+      "id": "node_004_ack",
+      "name": "✅ ACK to Meta (200 OK)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [860, 580]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://firestore.googleapis.com/v1/projects/{{ $env.FIREBASE_PROJECT_ID }}/databases/(default)/documents/clients?pageSize=200",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.FIREBASE_ACCESS_TOKEN }}" }
+          ]
+        }
+      },
+      "id": "node_005_fetch_client",
+      "name": "🔥 Fetch Client Config (Firebase REST)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [860, 400],
+      "notes": "Uses Firebase REST API — no SDK needed. Fetches all clients then filters by WABA ID."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Find client by WABA ID + Run Guard Checks\n// ============================================================\n\nconst firebaseResp = $input.first().json;\nconst messageData = $('🔍 Validate & Extract Payload').first().json;\nconst docs = firebaseResp.documents || [];\n\n// Find client matching the incoming WABA ID\nlet client = null;\nfor (const doc of docs) {\n  const fields = doc.fields || {};\n  const wabaField = fields?.whatsapp_config?.mapValue?.fields?.waba_id?.stringValue;\n  if (wabaField === messageData.waba_id) {\n    // Parse Firebase document fields into clean object\n    client = {\n      client_id: fields.client_id?.stringValue,\n      business_name: fields.business_name?.stringValue,\n      whatsapp_config: {\n        phone_number_id: fields.whatsapp_config?.mapValue?.fields?.phone_number_id?.stringValue,\n        waba_id: fields.whatsapp_config?.mapValue?.fields?.waba_id?.stringValue,\n        access_token: fields.whatsapp_config?.mapValue?.fields?.access_token?.stringValue\n      },\n      subscription: {\n        status: fields.subscription?.mapValue?.fields?.status?.stringValue,\n        expiry_date: fields.subscription?.mapValue?.fields?.expiry_date?.stringValue,\n        plan: fields.subscription?.mapValue?.fields?.plan?.stringValue\n      },\n      ai_config: {\n        language_mode: fields.ai_config?.mapValue?.fields?.language_mode?.stringValue || 'auto',\n        forced_language: fields.ai_config?.mapValue?.fields?.forced_language?.stringValue || null,\n        arcee_model: fields.ai_config?.mapValue?.fields?.arcee_model?.stringValue || 'arcee-blaze',\n        temperature: parseFloat(fields.ai_config?.mapValue?.fields?.temperature?.doubleValue || 0.7),\n        max_tokens: parseInt(fields.ai_config?.mapValue?.fields?.max_tokens?.integerValue || 1024),\n        system_prompt: fields.ai_config?.mapValue?.fields?.system_prompt?.stringValue,\n        brand_name: fields.ai_config?.mapValue?.fields?.brand_name?.stringValue\n      },\n      safety_config: {\n        guardrails_enabled: fields.safety_config?.mapValue?.fields?.guardrails_enabled?.booleanValue ?? true,\n        blocked_topics: (fields.safety_config?.mapValue?.fields?.blocked_topics?.arrayValue?.values || []).map(v => v.stringValue)\n      },\n      status: {\n        is_active: fields.status?.mapValue?.fields?.is_active?.booleanValue ?? true,\n        kill_switch: fields.status?.mapValue?.fields?.kill_switch?.booleanValue ?? false\n      }\n    };\n    break;\n  }\n}\n\nif (!client) {\n  return [{ json: { blocked: true, reason: 'CLIENT_NOT_FOUND', message_data: messageData } }];\n}\n\n// Guard: Kill Switch\nif (client.status.kill_switch) {\n  return [{ json: { blocked: true, reason: 'CLIENT_KILL_SWITCH', client, message_data: messageData } }];\n}\n\n// Guard: Subscription Expiry\nconst now = new Date();\nconst expiry = new Date(client.subscription.expiry_date);\nif (expiry < now) {\n  return [{ json: { blocked: true, reason: 'SUBSCRIPTION_EXPIRED', client, message_data: messageData } }];\n}\n\nreturn [{ json: { blocked: false, client, message_data: messageData } }];"
+      },
+      "id": "node_006_guard",
+      "name": "🛡️ Find Client & Guard Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.blocked }}", "value2": false }]
+        }
+      },
+      "id": "node_007_block_check",
+      "name": "🚦 Blocked?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1300, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Safety Filter — Blocks sensitive topics\n// ============================================================\n\nconst { client, message_data } = $input.first().json;\nconst text = message_data.message_text.toLowerCase();\nconst safetyConfig = client.safety_config;\n\nif (!safetyConfig?.guardrails_enabled) {\n  return [{ json: { safe: true, client, message_data } }];\n}\n\nconst BLOCKED_PATTERNS = {\n  politics: [\n    /\\b(سياس|انتخاب|حزب|رئيس|برلمان|ثورة|احتجاج|معارضة)\\b/i,\n    /\\b(politique|élection|parti|président|parlement|révolution)\\b/i,\n    /\\b(politic|election|party|president|parliament|revolution)\\b/i\n  ],\n  religion: [\n    /\\b(دين|إسلام|مسيح|يهود|فتوى|حلال|حرام|كفر|شيعة|سنة)\\b/i,\n    /\\b(religion|islam|chrétien|juif|fatwa|halal|haram)\\b/i,\n    /\\b(religion|islam|christian|jewish|fatwa|halal|haram)\\b/i\n  ],\n  adult_content: [ /\\b(sex|nude|xxx|porn|escort)\\b/i, /\\b(جنس|عاري|بورن|دعارة)\\b/i ],\n  violence: [\n    /\\b(bomb|weapon|kill|terrorist|attack)\\b/i,\n    /\\b(قنبلة|سلاح|إرهاب|قتل|هجوم)\\b/i\n  ]\n};\n\nconst blockedTopics = safetyConfig.blocked_topics || ['politics','religion','adult_content','violence'];\nlet detectedTopic = null;\n\nfor (const topic of blockedTopics) {\n  if (BLOCKED_PATTERNS[topic]) {\n    for (const pattern of BLOCKED_PATTERNS[topic]) {\n      if (pattern.test(text)) { detectedTopic = topic; break; }\n    }\n  }\n  if (detectedTopic) break;\n}\n\nif (detectedTopic) {\n  return [{ json: { safe: false, detected_topic: detectedTopic, client, message_data } }];\n}\n\nreturn [{ json: { safe: true, client, message_data } }];"
+      },
+      "id": "node_008_safety",
+      "name": "🔒 Safety Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Multi-Lingual Auto-Detection (AR / FR / EN)\n// ============================================================\n\nconst { client, message_data } = $input.first().json;\nconst text = message_data.message_text;\nconst aiConfig = client.ai_config;\n\n// Manual Override check\nif (aiConfig.language_mode === 'manual' && aiConfig.forced_language) {\n  return [{ json: {\n    language: aiConfig.forced_language,\n    detection_method: 'manual_override',\n    client, message_data\n  }}];\n}\n\n// Auto-Detection\nconst arabicScore  = (text.match(/[\\u0600-\\u06FF]/g) || []).length;\nconst frenchScore  = (text.match(/\\b(je|tu|il|nous|vous|le|la|les|de|du|est|bonjour|merci|comment|votre)\\b/gi) || []).length;\nconst englishScore = (text.match(/\\b(i|you|he|she|we|the|is|are|hello|hi|thank|how|please|help)\\b/gi) || []).length;\n\nlet language = 'ar';\nif (arabicScore > 2) language = 'ar';\nelse if (frenchScore >= englishScore && frenchScore > 0) language = 'fr';\nelse if (englishScore > 0) language = 'en';\n\nreturn [{ json: { language, detection_method: 'auto', client, message_data } }];"
+      },
+      "id": "node_009_langdetect",
+      "name": "🌍 Language Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Build Arcee Prompt\n// Constructs the full prompt for Arcee AI\n// ============================================================\n\nconst { client, message_data, language } = $input.first().json;\nconst aiConfig = client.ai_config;\n\nconst langInstructions = {\n  ar: 'يجب أن تكون جميع ردودك باللغة العربية. استخدم أسلوباً احترافياً وودوداً.',\n  fr: 'Toutes vos réponses doivent être en français, de manière professionnelle.',\n  en: 'All your responses must be in English, professional and friendly.'\n};\n\nconst systemPrompt = `${aiConfig.system_prompt || 'أنت مساعد ذكي احترافي.'}\n\n--- قاعدة اللغة الإلزامية ---\n${langInstructions[language || 'ar']}\n\n--- إرشادات العلامة التجارية ---\nاسم العلامة: ${aiConfig.brand_name || client.business_name}\nناقش فقط المواضيع المتعلقة بهذا العمل التجاري.\nلا تذكر أبداً المنافسين.\nلا تناقش السياسة أو الدين أو المواضيع الحساسة.\nإذا سُئلت هل أنت ذكاء اصطناعي: أجب بـ \"أنا مساعدك الرقمي\" فقط.`;\n\nreturn [{ json: {\n  system_prompt: systemPrompt,\n  user_message: message_data.message_text,\n  language,\n  arcee_model: aiConfig.arcee_model || 'arcee-blaze',\n  temperature: aiConfig.temperature || 0.7,\n  max_tokens: aiConfig.max_tokens || 1024,\n  client,\n  message_data\n}}];"
+      },
+      "id": "node_010_buildprompt",
+      "name": "📝 Build Arcee Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://models.arcee.ai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.ARCEE_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.arcee_model }}\",\n  \"max_tokens\": {{ $json.max_tokens }},\n  \"temperature\": {{ $json.temperature }},\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.user_message) }} }\n  ]\n}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "node_011_arcee",
+      "name": "🤖 Arcee AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2180, 300],
+      "notes": "Calls Arcee API — OpenAI-compatible format. Model configurable per client in Firebase."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Extract Arcee Response\n// Arcee uses same format as OpenAI\n// ============================================================\n\nconst arceeResp = $input.first().json;\nconst promptData = $('📝 Build Arcee Prompt').first().json;\n\n// Extract text from Arcee response (OpenAI-compatible format)\nconst aiText = arceeResp.choices?.[0]?.message?.content ||\n               arceeResp.choices?.[0]?.text ||\n               'عذراً، حدث خطأ تقني. يرجى المحاولة مرة أخرى.';\n\nconst client = promptData.client;\nconst messageData = promptData.message_data;\n\n// Build WhatsApp message payload\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  recipient_type: 'individual',\n  to: messageData.from_phone,\n  type: 'text',\n  text: { body: aiText, preview_url: false }\n};\n\nreturn [{ json: {\n  payload: whatsappPayload,\n  phone_number_id: client.whatsapp_config.phone_number_id,\n  access_token: client.whatsapp_config.access_token,\n  ai_response: aiText,\n  client,\n  message_data: messageData\n}}];"
+      },
+      "id": "node_012_format",
+      "name": "💬 Format Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $json.phone_number_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.access_token }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "node_013_send_wa",
+      "name": "📤 Send WhatsApp Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2620, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Save conversation + Update analytics via Firebase REST\nconst sendResult = $input.first().json;\nconst formatData = $('💬 Format Reply').first().json;\nconst now = new Date().toISOString();\n\n// Build Firestore document update\nconst docId = `${formatData.client.client_id}_${formatData.message_data.from_phone.replace('+','')}` ;\n\nreturn [{ json: {\n  doc_id: docId,\n  client_id: formatData.client.client_id,\n  user_phone: formatData.message_data.from_phone,\n  user_message: formatData.message_data.message_text,\n  ai_response: formatData.ai_response,\n  timestamp: now,\n  language: $('🌍 Language Detection').first().json.language\n}}];"
+      },
+      "id": "node_014_save",
+      "name": "💾 Save to Firebase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2840, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://firestore.googleapis.com/v1/projects/{{ $env.FIREBASE_PROJECT_ID }}/databases/(default)/documents/conversations/{{ $json.doc_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.FIREBASE_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"client_id\": { \"stringValue\": \"{{ $json.client_id }}\" },\n    \"user_phone\": { \"stringValue\": \"{{ $json.user_phone }}\" },\n    \"last_user_message\": { \"stringValue\": {{ JSON.stringify($json.user_message) }} },\n    \"last_ai_response\": { \"stringValue\": {{ JSON.stringify($json.ai_response) }} },\n    \"last_activity\": { \"stringValue\": \"{{ $json.timestamp }}\" },\n    \"language\": { \"stringValue\": \"{{ $json.language }}\" }\n  }\n}"
+      },
+      "id": "node_015_firebase_write",
+      "name": "🔥 Write Conversation to Firebase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3060, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send blocked/expired message\nconst blockData = $input.first().json;\nconst client = blockData.client;\nconst messageData = blockData.message_data;\n\nconst MESSAGES = {\n  CLIENT_NOT_FOUND:     { ar: 'عذراً، هذه الخدمة غير متاحة حالياً.' },\n  CLIENT_KILL_SWITCH:   { ar: 'الخدمة موقوفة مؤقتاً. للمساعدة تواصل معنا.' },\n  SUBSCRIPTION_EXPIRED: { ar: 'انتهت صلاحية الاشتراك. يرجى التجديد للاستمرار.' },\n  MAINTENANCE_MODE:     { ar: 'الخدمة تحت الصيانة. نعود قريباً.' }\n};\n\nconst msg = MESSAGES[blockData.reason]?.ar || 'الخدمة غير متاحة.';\n\nreturn [{ json: {\n  payload: {\n    messaging_product: 'whatsapp',\n    to: messageData?.from_phone,\n    type: 'text',\n    text: { body: msg }\n  },\n  phone_number_id: client?.whatsapp_config?.phone_number_id,\n  access_token: client?.whatsapp_config?.access_token\n}}];"
+      },
+      "id": "node_016_blocked",
+      "name": "🚫 Send Blocked Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 580]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $json.phone_number_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.access_token }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "node_017_send_blocked",
+      "name": "📤 Send Blocked Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1740, 580]
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 */6 * * *" }] }
+      },
+      "id": "node_018_cron",
+      "name": "⏰ Subscription Alert CRON",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [200, 700]
+    }
+  ],
+
+  "connections": {
+    "📥 WhatsApp Webhook Entry":     { "main": [[{ "node": "🔍 Validate & Extract Payload",    "type": "main", "index": 0 }]] },
+    "🔍 Validate & Extract Payload": { "main": [[{ "node": "🔀 Is Valid Message?",              "type": "main", "index": 0 }]] },
+    "🔀 Is Valid Message?": {
+      "main": [
+        [{ "node": "🔥 Fetch Client Config (Firebase REST)", "type": "main", "index": 0 }],
+        [{ "node": "✅ ACK to Meta (200 OK)",                "type": "main", "index": 0 }]
+      ]
+    },
+    "🔥 Fetch Client Config (Firebase REST)": { "main": [[{ "node": "🛡️ Find Client & Guard Checks", "type": "main", "index": 0 }]] },
+    "🛡️ Find Client & Guard Checks":         { "main": [[{ "node": "🚦 Blocked?",                    "type": "main", "index": 0 }]] },
+    "🚦 Blocked?": {
+      "main": [
+        [{ "node": "🔒 Safety Filter",      "type": "main", "index": 0 }],
+        [{ "node": "🚫 Send Blocked Message","type": "main", "index": 0 }]
+      ]
+    },
+    "🔒 Safety Filter":       { "main": [[{ "node": "🌍 Language Detection",  "type": "main", "index": 0 }]] },
+    "🌍 Language Detection":  { "main": [[{ "node": "📝 Build Arcee Prompt",  "type": "main", "index": 0 }]] },
+    "📝 Build Arcee Prompt":  { "main": [[{ "node": "🤖 Arcee AI",           "type": "main", "index": 0 }]] },
+    "🤖 Arcee AI":            { "main": [[{ "node": "💬 Format Reply",        "type": "main", "index": 0 }]] },
+    "💬 Format Reply":        { "main": [[{ "node": "📤 Send WhatsApp Message","type": "main", "index": 0 }]] },
+    "📤 Send WhatsApp Message":{ "main": [[{ "node": "💾 Save to Firebase",   "type": "main", "index": 0 }]] },
+    "💾 Save to Firebase":    { "main": [[{ "node": "🔥 Write Conversation to Firebase","type": "main", "index": 0 }]] },
+    "🚫 Send Blocked Message": { "main": [[{ "node": "📤 Send Blocked Reply", "type": "main", "index": 0 }]] }
+  },
+
+  "settings": { "executionOrder": "v1" },
+
+  "SETUP_GUIDE": {
+    "env_variables_in_n8n": {
+      "FIREBASE_PROJECT_ID": "اسم مشروعك في Firebase",
+      "FIREBASE_ACCESS_TOKEN": "راجع التعليمات أدناه لكيفية الحصول عليه",
+      "ARCEE_API_KEY": "مفتاح Arcee API الخاص بك"
+    },
+    "arcee_models_available": [
+      "arcee-blaze",
+      "arcee-lite",
+      "arcee-nova",
+      "arcee-agent"
+    ],
+    "firebase_access_token_note": "استخدم Firebase Service Account مع google-auth-library لتوليد Access Token تلقائياً عند كل طلب"
+  }
+}

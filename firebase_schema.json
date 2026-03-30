@@ -1,0 +1,185 @@
+{
+  "_comment": "=== DONIA PULSE AI — Firebase Firestore Schema v1.0 ===",
+  "_author": "DONIA LABS TECH",
+
+  "collections": {
+
+    "clients": {
+      "_description": "Master registry for all onboarded clients (tenants).",
+      "_document_id": "client_id (auto-generated or slug: e.g. 'ecommerce_darija_01')",
+
+      "sample_document": {
+        "client_id":        "ecommerce_darija_01",
+        "business_name":    "متجر دارجة",
+        "business_sector":  "e-commerce",
+        "contact_email":    "owner@darija-store.dz",
+        "contact_phone":    "+213xxxxxxxxx",
+
+        "whatsapp_config": {
+          "phone_number_id":    "1234567890",
+          "waba_id":            "0987654321",
+          "access_token":       "EAAxxxxxxxx",
+          "webhook_verify_token": "secret_verify_token_here"
+        },
+
+        "subscription": {
+          "plan":           "premium",
+          "status":         "active",
+          "start_date":     "2025-01-01T00:00:00Z",
+          "expiry_date":    "2025-12-31T23:59:59Z",
+          "auto_alert_48h": true,
+          "alert_sent":     false
+        },
+
+        "ai_config": {
+          "language_mode":   "auto",
+          "forced_language": null,
+          "model":           "gpt-4o",
+          "temperature":     0.7,
+          "max_tokens":      1024,
+          "system_prompt":   "أنت مساعد ذكي لمتجر دارجة. ردودك يجب أن تكون احترافية وودودة...",
+          "brand_name":      "متجر دارجة",
+          "brand_tone":      "friendly_professional"
+        },
+
+        "safety_config": {
+          "guardrails_enabled":   true,
+          "blocked_topics":       ["politics", "religion", "adult_content", "violence"],
+          "custom_blocked_words": ["منافس1", "منافس2"],
+          "fallback_message": {
+            "ar": "عذراً، لا يمكنني الإجابة على هذا السؤال. هل يمكنني مساعدتك في شيء آخر؟",
+            "fr": "Désolé, je ne peux pas répondre à cette question. Puis-je vous aider autrement?",
+            "en": "Sorry, I cannot answer this question. Can I help you with something else?"
+          }
+        },
+
+        "analytics": {
+          "total_messages":     0,
+          "messages_today":     0,
+          "avg_response_time_ms": 0,
+          "last_activity":      null
+        },
+
+        "status": {
+          "is_active":        true,
+          "kill_switch":      false,
+          "kill_switch_reason": null,
+          "maintenance_mode": false
+        },
+
+        "meta": {
+          "created_at":    "2025-01-01T00:00:00Z",
+          "updated_at":    "2025-01-01T00:00:00Z",
+          "created_by":    "admin@donialabs.tech",
+          "notes":         "VIP client — priority support"
+        }
+      }
+    },
+
+    "conversations": {
+      "_description": "Stores all conversation threads per client per user.",
+      "_document_id": "{client_id}_{wa_phone_number}",
+
+      "sample_document": {
+        "client_id":       "ecommerce_darija_01",
+        "user_phone":      "+213xxxxxxxxx",
+        "user_name":       "Ahmed",
+        "session_id":      "sess_abc123",
+        "language_detected": "ar",
+        "started_at":      "2025-06-01T10:00:00Z",
+        "last_message_at": "2025-06-01T10:45:00Z",
+        "message_count":   12,
+        "status":          "active",
+
+        "messages": [
+          {
+            "id":        "msg_001",
+            "role":      "user",
+            "content":   "السلام عليكم، كيف يمكنني الطلب؟",
+            "timestamp": "2025-06-01T10:00:00Z",
+            "language":  "ar"
+          },
+          {
+            "id":        "msg_002",
+            "role":      "assistant",
+            "content":   "وعليكم السلام! يسعدني مساعدتك...",
+            "timestamp": "2025-06-01T10:00:03Z",
+            "language":  "ar",
+            "latency_ms": 2340
+          }
+        ]
+      }
+    },
+
+    "system_config": {
+      "_description": "Global platform-level settings managed by super-admin.",
+      "_document_id": "global_settings (singleton)",
+
+      "sample_document": {
+        "platform_name":      "Donia Pulse AI",
+        "version":            "1.0.0",
+        "global_kill_switch": false,
+        "kill_switch_message": {
+          "ar": "الخدمة متوقفة مؤقتاً للصيانة. نعتذر عن الإزعاج.",
+          "fr": "Service temporairement indisponible pour maintenance.",
+          "en": "Service temporarily unavailable for maintenance."
+        },
+        "default_ai_model":   "gpt-4o",
+        "supported_languages": ["ar", "fr", "en"],
+        "meta_api_version":    "v20.0",
+        "n8n_webhook_base_url": "https://your-n8n-instance.com/webhook/",
+        "alert_email":         "alerts@donialabs.tech",
+        "updated_at":          "2025-01-01T00:00:00Z"
+      }
+    },
+
+    "audit_logs": {
+      "_description": "Immutable log of all admin actions for accountability.",
+      "_document_id": "auto-generated",
+
+      "sample_document": {
+        "timestamp":   "2025-06-01T12:00:00Z",
+        "admin_email": "admin@donialabs.tech",
+        "action":      "kill_switch_activated",
+        "target":      "ecommerce_darija_01",
+        "details":     "Client suspended due to payment issue.",
+        "ip_address":  "196.x.x.x"
+      }
+    },
+
+    "alerts": {
+      "_description": "Queue for subscription expiry alerts and system notifications.",
+      "_document_id": "auto-generated",
+
+      "sample_document": {
+        "type":        "subscription_expiry_48h",
+        "client_id":   "ecommerce_darija_01",
+        "message":     "Subscription expiring in 48 hours",
+        "expiry_date": "2025-12-31T23:59:59Z",
+        "sent":        false,
+        "created_at":  "2025-12-29T23:59:59Z",
+        "sent_at":     null
+      }
+    }
+  },
+
+  "security_rules": {
+    "_file": "firestore.rules",
+    "_content": "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    // Only authenticated admin users can read/write\n    match /clients/{clientId} {\n      allow read, write: if request.auth != null && request.auth.token.admin == true;\n    }\n    match /system_config/{doc} {\n      allow read, write: if request.auth != null && request.auth.token.superadmin == true;\n    }\n    match /audit_logs/{logId} {\n      allow read: if request.auth != null && request.auth.token.admin == true;\n      allow write: if false; // Only writable via server SDK\n    }\n  }\n}"
+  },
+
+  "indexes": {
+    "clients_by_status": {
+      "collection": "clients",
+      "fields": ["status.is_active ASC", "meta.created_at DESC"]
+    },
+    "clients_by_expiry": {
+      "collection": "clients",
+      "fields": ["subscription.expiry_date ASC", "subscription.status ASC"]
+    },
+    "conversations_by_client": {
+      "collection": "conversations",
+      "fields": ["client_id ASC", "last_message_at DESC"]
+    }
+  }
+}
