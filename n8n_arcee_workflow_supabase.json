@@ -1,0 +1,548 @@
+{
+  "name": "Donia Pulse AI — Arcee Workflow v2.1 (Supabase)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node_001_webhook",
+      "name": "📥 WhatsApp Webhook Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "donia-pulse-whatsapp-main"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Validate & Route Incoming Webhook\n// ============================================================\n\nconst body = $input.first().json.body;\n\n// Handle Meta Webhook Verification\nif ($input.first().json.query?.['hub.mode'] === 'subscribe') {\n  return [{ json: { type: 'verification', challenge: $input.first().json.query['hub.challenge'] } }];\n}\n\n// Validate WhatsApp Message Structure\nif (!body?.entry?.[0]?.changes?.[0]?.value?.messages) {\n  return [{ json: { type: 'non_message', raw: body } }];\n}\n\nconst change = body.entry[0].changes[0].value;\nconst message = change.messages[0];\nconst contact = change.contacts?.[0];\nconst wabaId = body.entry[0].id;\n\nreturn [{\n  json: {\n    type: 'message',\n    waba_id: wabaId,\n    phone_number_id: change.metadata.phone_number_id,\n    message_id: message.id,\n    from_phone: message.from,\n    from_name: contact?.profile?.name || 'Unknown',\n    message_type: message.type,\n    message_text: message.text?.body || '',\n    timestamp: message.timestamp\n  }\n}];"
+      },
+      "id": "node_002_validate",
+      "name": "🔍 Validate & Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.type }}",
+              "value2": "message"
+            }
+          ]
+        }
+      },
+      "id": "node_003_router",
+      "name": "🔀 Is Valid Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        640,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK"
+      },
+      "id": "node_004_ack",
+      "name": "✅ ACK to Meta (200 OK)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        860,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/clients?phone_number_id=eq.{{ $json.phone_number_id }}&select=*",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}"
+            }
+          ]
+        }
+      },
+      "id": "node_005_fetch_client",
+      "name": "🟢 Fetch Client Config (Supabase)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        860,
+        400
+      ],
+      "notes": "Uses Supabase REST (PostgREST). Looks up the client row by phone_number_id. Returns a JSON array (0 or 1 row)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Find client (Supabase row) + Run Guard Checks\n// ============================================================\n\nconst resp = $input.first().json;\nconst messageData = $('🔍 Validate & Extract Payload').first().json;\n\n// Supabase REST returns a plain JSON array of matching rows\nconst rows = Array.isArray(resp) ? resp : (Array.isArray(resp.body) ? resp.body : []);\nconst client = rows[0] || null;\n\nif (!client) {\n  return [{ json: { blocked: true, reason: 'CLIENT_NOT_FOUND', client: null, message_data: messageData } }];\n}\n\nif (client.kill_switch) {\n  return [{ json: { blocked: true, reason: 'CLIENT_KILL_SWITCH', client, message_data: messageData } }];\n}\n\nif (client.maintenance_mode) {\n  return [{ json: { blocked: true, reason: 'MAINTENANCE_MODE', client, message_data: messageData } }];\n}\n\nif (client.is_active === false) {\n  return [{ json: { blocked: true, reason: 'CLIENT_INACTIVE', client, message_data: messageData } }];\n}\n\nconst now = new Date();\nconst expiry = client.expiry_date ? new Date(client.expiry_date) : null;\nif (expiry && expiry < now) {\n  return [{ json: { blocked: true, reason: 'SUBSCRIPTION_EXPIRED', client, message_data: messageData } }];\n}\n\nreturn [{ json: { blocked: false, client, message_data: messageData } }];"
+      },
+      "id": "node_006_guard",
+      "name": "🛡️ Find Client & Guard Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.blocked }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "node_007_block_check",
+      "name": "🚦 Blocked?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Safety Filter — Blocks sensitive topics (Supabase columns are flat)\n// ============================================================\n\nconst { client, message_data } = $input.first().json;\nconst text = message_data.message_text.toLowerCase();\n\nif (!client.guardrails_enabled) {\n  return [{ json: { safe: true, client, message_data } }];\n}\n\nconst BLOCKED_PATTERNS = {\n  politics: [\n    /\\b(سياس|انتخاب|حزب|رئيس|برلمان|ثورة|احتجاج|معارضة)\\b/i,\n    /\\b(politique|élection|parti|président|parlement|révolution)\\b/i,\n    /\\b(politic|election|party|president|parliament|revolution)\\b/i\n  ],\n  religion: [\n    /\\b(دين|إسلام|مسيح|يهود|فتوى|حلال|حرام|كفر|شيعة|سنة)\\b/i,\n    /\\b(religion|islam|chrétien|juif|fatwa|halal|haram)\\b/i,\n    /\\b(religion|islam|christian|jewish|fatwa|halal|haram)\\b/i\n  ],\n  adult_content: [ /\\b(sex|nude|xxx|porn|escort)\\b/i, /\\b(جنس|عاري|بورن|دعارة)\\b/i ],\n  violence: [\n    /\\b(bomb|weapon|kill|terrorist|attack)\\b/i,\n    /\\b(قنبلة|سلاح|إرهاب|قتل|هجوم)\\b/i\n  ]\n};\n\nconst blockedTopics = client.blocked_topics || ['politics','religion','adult_content','violence'];\nlet detectedTopic = null;\n\nfor (const topic of blockedTopics) {\n  if (BLOCKED_PATTERNS[topic]) {\n    for (const pattern of BLOCKED_PATTERNS[topic]) {\n      if (pattern.test(text)) { detectedTopic = topic; break; }\n    }\n  }\n  if (detectedTopic) break;\n}\n\n// Custom blocked words (exact, case-insensitive, per-client)\nif (!detectedTopic && Array.isArray(client.custom_blocked_words)) {\n  for (const word of client.custom_blocked_words) {\n    if (word && text.includes(String(word).toLowerCase())) { detectedTopic = 'custom_blocked_word'; break; }\n  }\n}\n\nif (detectedTopic) {\n  return [{ json: { safe: false, detected_topic: detectedTopic, client, message_data } }];\n}\n\nreturn [{ json: { safe: true, client, message_data } }];"
+      },
+      "id": "node_008_safety",
+      "name": "🔒 Safety Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Multi-Lingual Auto-Detection (AR / FR / EN)\n// ============================================================\n\nconst { client, message_data } = $input.first().json;\nconst text = message_data.message_text;\n\nif (client.language_mode === 'manual' && client.forced_language) {\n  return [{ json: {\n    language: client.forced_language,\n    detection_method: 'manual_override',\n    client, message_data\n  }}];\n}\n\nconst arabicScore  = (text.match(/[\\u0600-\\u06FF]/g) || []).length;\nconst frenchScore  = (text.match(/\\b(je|tu|il|nous|vous|le|la|les|de|du|est|bonjour|merci|comment|votre)\\b/gi) || []).length;\nconst englishScore = (text.match(/\\b(i|you|he|she|we|the|is|are|hello|hi|thank|how|please|help)\\b/gi) || []).length;\n\nlet language = 'ar';\nif (arabicScore > 2) language = 'ar';\nelse if (frenchScore >= englishScore && frenchScore > 0) language = 'fr';\nelse if (englishScore > 0) language = 'en';\n\nreturn [{ json: { language, detection_method: 'auto', client, message_data } }];"
+      },
+      "id": "node_009_langdetect",
+      "name": "🌍 Language Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Build Arcee Prompt (flat Supabase client object)\n// ============================================================\n\nconst { client, message_data, language } = $input.first().json;\n\nconst langInstructions = {\n  ar: 'يجب أن تكون جميع ردودك باللغة العربية. استخدم أسلوباً احترافياً وودوداً.',\n  fr: 'Toutes vos réponses doivent être en français, de manière professionnelle.',\n  en: 'All your responses must be in English, professional and friendly.'\n};\n\nconst systemPrompt = `${client.system_prompt || 'أنت مساعد ذكي احترافي.'}\n\n--- قاعدة اللغة الإلزامية ---\n${langInstructions[language || 'ar']}\n\n--- إرشادات العلامة التجارية ---\nاسم العلامة: ${client.brand_name || client.business_name}\nناقش فقط المواضيع المتعلقة بهذا العمل التجاري.\nلا تذكر أبداً المنافسين.\nلا تناقش السياسة أو الدين أو المواضيع الحساسة.\nإذا سُئلت هل أنت ذكاء اصطناعي: أجب بـ \"أنا مساعدك الرقمي\" فقط.`;\n\nreturn [{ json: {\n  system_prompt: systemPrompt,\n  user_message: message_data.message_text,\n  language,\n  arcee_model: client.arcee_model || 'arcee-blaze',\n  temperature: client.temperature || 0.7,\n  max_tokens: client.max_tokens || 1024,\n  client,\n  message_data\n}}];"
+      },
+      "id": "node_010_buildprompt",
+      "name": "📝 Build Arcee Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://models.arcee.ai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.ARCEE_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.arcee_model }}\",\n  \"max_tokens\": {{ $json.max_tokens }},\n  \"temperature\": {{ $json.temperature }},\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.user_message) }} }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "node_011_arcee",
+      "name": "🤖 Arcee AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2180,
+        300
+      ],
+      "notes": "Calls Arcee API — OpenAI-compatible format. Model configurable per client in Firebase."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NODE: Extract Arcee Response (flat Supabase client object)\n// ============================================================\n\nconst arceeResp = $input.first().json;\nconst promptData = $('📝 Build Arcee Prompt').first().json;\n\nconst aiText = arceeResp.choices?.[0]?.message?.content ||\n               arceeResp.choices?.[0]?.text ||\n               'عذراً، حدث خطأ تقني. يرجى المحاولة مرة أخرى.';\n\nconst client = promptData.client;\nconst messageData = promptData.message_data;\n\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  recipient_type: 'individual',\n  to: messageData.from_phone,\n  type: 'text',\n  text: { body: aiText, preview_url: false }\n};\n\nreturn [{ json: {\n  payload: whatsappPayload,\n  phone_number_id: client.phone_number_id,\n  access_token: client.access_token,\n  ai_response: aiText,\n  language: promptData.language,\n  client,\n  message_data: messageData\n}}];"
+      },
+      "id": "node_012_format",
+      "name": "💬 Format Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $json.phone_number_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "node_013_send_wa",
+      "name": "📤 Send WhatsApp Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the row to insert into Supabase \"conversations\" table\nconst formatData = $input.first().json;\n\nreturn [{ json: {\n  client_id: formatData.client.client_id,\n  user_phone: formatData.message_data.from_phone,\n  user_name: formatData.message_data.from_name || 'Unknown',\n  language: formatData.language,\n  user_message: formatData.message_data.message_text,\n  ai_response: formatData.ai_response,\n  is_blocked: false\n}}];"
+      },
+      "id": "node_014_save",
+      "name": "💾 Prepare Conversation Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/conversations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "node_015_firebase_write",
+      "name": "🟢 Save Conversation (Supabase)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3060,
+        300
+      ],
+      "notes": "Inserts one row into the Supabase 'conversations' table via PostgREST."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send blocked/expired message using the client's own fallback text + flat Supabase fields\nconst blockData = $input.first().json;\nconst client = blockData.client;\nconst messageData = blockData.message_data;\n\nconst lang = (client && client.language_mode === 'manual' && client.forced_language) ? client.forced_language : 'ar';\n\nconst GENERIC = {\n  CLIENT_NOT_FOUND:     'عذراً، هذه الخدمة غير متاحة حالياً.',\n  CLIENT_KILL_SWITCH:   (client && client.kill_switch_reason) || 'الخدمة موقوفة مؤقتاً. للمساعدة تواصل معنا.',\n  SUBSCRIPTION_EXPIRED: 'انتهت صلاحية الاشتراك. يرجى التجديد للاستمرار.',\n  MAINTENANCE_MODE:     'الخدمة تحت الصيانة. نعود قريباً.',\n  CLIENT_INACTIVE:      'هذا الحساب غير مفعّل حالياً.'\n};\n\nlet msg;\nif (blockData.reason === 'SUBSCRIPTION_EXPIRED' || blockData.reason === 'CLIENT_KILL_SWITCH') {\n  // Prefer the client's own configured fallback message when available\n  msg = (client && (lang === 'fr' ? client.fallback_fr : lang === 'en' ? client.fallback_en : client.fallback_ar))\n        || GENERIC[blockData.reason];\n} else {\n  msg = GENERIC[blockData.reason] || 'الخدمة غير متاحة.';\n}\n\nreturn [{ json: {\n  payload: {\n    messaging_product: 'whatsapp',\n    to: messageData?.from_phone,\n    type: 'text',\n    text: { body: msg }\n  },\n  phone_number_id: client?.phone_number_id,\n  access_token: client?.access_token\n}}];"
+      },
+      "id": "node_016_blocked",
+      "name": "🚫 Send Blocked Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $json.phone_number_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "node_017_send_blocked",
+      "name": "📤 Send Blocked Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1740,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "node_018_cron",
+      "name": "⏰ Subscription Alert CRON",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "📥 WhatsApp Webhook Entry": {
+      "main": [
+        [
+          {
+            "node": "🔍 Validate & Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Validate & Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "🔀 Is Valid Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Is Valid Message?": {
+      "main": [
+        [
+          {
+            "node": "🟢 Fetch Client Config (Supabase)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✅ ACK to Meta (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🟢 Fetch Client Config (Supabase)": {
+      "main": [
+        [
+          {
+            "node": "🛡️ Find Client & Guard Checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ Find Client & Guard Checks": {
+      "main": [
+        [
+          {
+            "node": "🚦 Blocked?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚦 Blocked?": {
+      "main": [
+        [
+          {
+            "node": "🔒 Safety Filter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🚫 Send Blocked Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔒 Safety Filter": {
+      "main": [
+        [
+          {
+            "node": "🌍 Language Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌍 Language Detection": {
+      "main": [
+        [
+          {
+            "node": "📝 Build Arcee Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Build Arcee Prompt": {
+      "main": [
+        [
+          {
+            "node": "🤖 Arcee AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Arcee AI": {
+      "main": [
+        [
+          {
+            "node": "💬 Format Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Format Reply": {
+      "main": [
+        [
+          {
+            "node": "📤 Send WhatsApp Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Send WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "💾 Prepare Conversation Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Prepare Conversation Data": {
+      "main": [
+        [
+          {
+            "node": "🟢 Save Conversation (Supabase)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚫 Send Blocked Message": {
+      "main": [
+        [
+          {
+            "node": "📤 Send Blocked Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "SETUP_GUIDE": {
+    "env_variables_in_n8n": {
+      "SUPABASE_URL": "رابط مشروعك في Supabase، مثال: https://xxxxx.supabase.co",
+      "SUPABASE_SERVICE_KEY": "Service Role Key من Supabase → Settings → API",
+      "ARCEE_API_KEY": "مفتاح Arcee API الخاص بك"
+    },
+    "arcee_models_available": [
+      "arcee-blaze",
+      "arcee-lite",
+      "arcee-nova",
+      "arcee-agent"
+    ],
+    "notes": "هذا الإصدار v2.1 يستعمل Supabase REST (PostgREST) بدل Firebase. لا حاجة لأي SDK، فقط طلبات HTTP عادية."
+  }
+}
