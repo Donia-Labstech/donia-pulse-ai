@@ -3,164 +3,100 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DONIA LABS TECH — مختبر الأفكار الذكية | وكلاء ذكاء اصطناعي على واتساب</title>
-<meta name="description" content="DONIA LABS TECH — Smart Ideas Lab — تبني وكلاء ذكاء اصطناعي على واتساب للأعمال فـ الوطن العربي وأوروبا، يردّون على العملاء تلقائياً بالعربية والفرنسية والإنجليزية، على مدار الساعة.">
+<title>DONIA LABS TECH — Smart Ideas Lab</title>
+<meta name="description" content="DONIA LABS TECH — Smart Ideas Lab. AI WhatsApp agents for businesses across the Arab world and Europe.">
+<link rel="icon" href="logo.jpg">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
 
   :root{
-    --bg:#0B0D14;
-    --bg-soft:#11141F;
-    --card:#161A28;
-    --border:#252A3D;
-    --ink:#EEF0F6;
-    --ink-dim:#9AA1B8;
-    --primary:#6C63FF;
-    --primary-soft:#6C63FF26;
-    --accent:#00D9A3;
-    --accent-soft:#00D9A326;
+    --bg:#0B0D14; --bg-soft:#11141F; --card:#161A28; --border:#252A3D;
+    --ink:#EEF0F6; --ink-dim:#9AA1B8;
+    --primary:#6C63FF; --primary-soft:#6C63FF26;
+    --accent:#00D9A3; --accent-soft:#00D9A326;
   }
-
   *{margin:0;padding:0;box-sizing:border-box;}
   html{scroll-behavior:smooth;}
-  body{
-    background:var(--bg);
-    color:var(--ink);
-    font-family:'IBM Plex Sans Arabic', sans-serif;
-    line-height:1.7;
-    overflow-x:hidden;
-  }
+  body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans Arabic', sans-serif;line-height:1.7;overflow-x:hidden;}
+  :lang(fr) body, :lang(en) body, html[lang="fr"] body, html[lang="en"] body{font-family:'IBM Plex Sans', sans-serif;}
+  html[lang="fr"] *, html[lang="en"] *{font-family:'IBM Plex Sans', sans-serif;}
   a{color:inherit;text-decoration:none;}
   .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
 
-  /* ===== NAV ===== */
-  header{
-    position:sticky;top:0;z-index:50;
-    background:rgba(11,13,20,.85);
-    backdrop-filter:blur(10px);
-    border-bottom:1px solid var(--border);
-  }
-  nav{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;max-width:1080px;margin:0 auto;}
-  .logo{font-weight:700;font-size:1.15rem;display:flex;align-items:center;gap:10px;}
-  .logo .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent);}
-  .navlinks{display:flex;gap:28px;font-size:.92rem;color:var(--ink-dim);}
+  header{position:sticky;top:0;z-index:50;background:rgba(11,13,20,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);}
+  nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;max-width:1080px;margin:0 auto;gap:16px;}
+  .logo{font-weight:700;font-size:1.05rem;display:flex;align-items:center;gap:10px;white-space:nowrap;}
+  .logo img{height:34px;width:34px;border-radius:8px;object-fit:cover;}
+  .navlinks{display:flex;gap:24px;font-size:.9rem;color:var(--ink-dim);}
   .navlinks a:hover{color:var(--ink);}
-  @media(max-width:640px){.navlinks{display:none;}}
+  @media(max-width:760px){.navlinks{display:none;}}
 
-  /* ===== HERO ===== */
-  .hero{padding:110px 24px 90px;position:relative;}
-  .hero:before{
-    content:"";position:absolute;inset:0;z-index:-1;
-    background:
-      radial-gradient(600px 400px at 80% -10%, var(--primary-soft), transparent),
-      radial-gradient(500px 350px at 10% 20%, var(--accent-soft), transparent);
-  }
-  .eyebrow{
-    display:inline-flex;align-items:center;gap:8px;
-    font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:.06em;
-    color:var(--accent);background:var(--accent-soft);
-    border:1px solid #00D9A355;border-radius:30px;padding:6px 16px;margin-bottom:28px;
-  }
-  h1{
-    font-size:clamp(2.1rem,5vw,3.4rem);
-    font-weight:700;line-height:1.25;max-width:760px;margin-bottom:22px;
-  }
-  h1 span{color:var(--accent);}
-  .lead{font-size:1.1rem;color:var(--ink-dim);max-width:620px;margin-bottom:36px;}
+  .langswitch{display:flex;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:30px;padding:4px;}
+  .lang-btn{border:none;background:transparent;color:var(--ink-dim);font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:20px;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:.15s;}
+  .lang-btn.active{background:var(--accent);color:#06231b;}
+  .lang-btn:hover:not(.active){color:var(--ink);}
+
+  .hero{padding:90px 24px 80px;position:relative;}
+  .hero:before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(600px 400px at 80% -10%, var(--primary-soft), transparent),radial-gradient(500px 350px at 10% 20%, var(--accent-soft), transparent);}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:.06em;color:var(--accent);background:var(--accent-soft);border:1px solid #00D9A355;border-radius:30px;padding:6px 16px;margin-bottom:28px;}
+  h1{font-size:clamp(2rem,5vw,3.2rem);font-weight:700;line-height:1.3;max-width:760px;margin-bottom:22px;}
+  .lead{font-size:1.05rem;color:var(--ink-dim);max-width:620px;margin-bottom:36px;}
   .cta-row{display:flex;gap:14px;flex-wrap:wrap;}
-  .btn{
-    display:inline-flex;align-items:center;gap:8px;
-    padding:13px 26px;border-radius:10px;font-weight:600;font-size:.95rem;
-    transition:transform .15s ease, box-shadow .15s ease;
-  }
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:10px;font-weight:600;font-size:.92rem;transition:transform .15s ease, box-shadow .15s ease;}
   .btn-primary{background:var(--accent);color:#06231b;}
   .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px var(--accent-soft);}
   .btn-ghost{border:1px solid var(--border);color:var(--ink);}
   .btn-ghost:hover{border-color:var(--primary);}
 
-  .stat-strip{
-    display:flex;gap:0;margin-top:64px;border-top:1px solid var(--border);
-    border-bottom:1px solid var(--border);flex-wrap:wrap;
-  }
-  .stat{flex:1;min-width:140px;padding:22px 0;border-left:1px solid var(--border);}
-  .stat:first-child{border-left:none;}
-  .stat b{display:block;font-family:'JetBrains Mono',monospace;font-size:1.6rem;color:var(--accent);}
-  .stat span{font-size:.82rem;color:var(--ink-dim);}
+  .stat-strip{display:flex;gap:0;margin-top:60px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .stat{flex:1;min-width:140px;padding:22px 0;border-inline-start:1px solid var(--border);}
+  .stat:first-child{border-inline-start:none;}
+  .stat b{display:block;font-family:'JetBrains Mono',monospace;font-size:1.5rem;color:var(--accent);}
+  .stat span{font-size:.8rem;color:var(--ink-dim);}
 
-  /* ===== SECTION GENERIC ===== */
-  section{padding:90px 24px;border-top:1px solid var(--border);}
+  section{padding:80px 24px;border-top:1px solid var(--border);}
   .tag{font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:.08em;color:var(--primary);margin-bottom:14px;display:block;}
-  h2{font-size:clamp(1.5rem,3vw,2.1rem);font-weight:700;margin-bottom:18px;max-width:600px;}
-  .sub{color:var(--ink-dim);max-width:560px;margin-bottom:48px;font-size:1rem;}
+  h2{font-size:clamp(1.4rem,3vw,2rem);font-weight:700;margin-bottom:18px;max-width:600px;}
+  .sub{color:var(--ink-dim);max-width:560px;margin-bottom:44px;font-size:1rem;}
 
-  /* ===== ABOUT ===== */
   .about-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;}
   @media(max-width:760px){.about-grid{grid-template-columns:1fr;}}
   .about-grid p{color:var(--ink-dim);margin-bottom:16px;}
   .about-grid strong{color:var(--ink);}
 
-  /* ===== SERVICES ===== */
   .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
   @media(max-width:860px){.cards{grid-template-columns:1fr;}}
-  .card{
-    background:var(--card);border:1px solid var(--border);border-radius:16px;
-    padding:30px 26px;transition:border-color .2s ease, transform .2s ease;
-  }
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:30px 26px;transition:border-color .2s ease, transform .2s ease;}
   .card:hover{border-color:var(--primary);transform:translateY(-4px);}
-  .card .ic{
-    width:42px;height:42px;border-radius:11px;background:var(--primary-soft);
-    display:flex;align-items:center;justify-content:center;color:var(--primary);
-    font-size:1.2rem;margin-bottom:18px;
-  }
-  .card h3{font-size:1.05rem;margin-bottom:10px;font-weight:600;}
-  .card p{color:var(--ink-dim);font-size:.92rem;}
+  .card .ic{width:42px;height:42px;border-radius:11px;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:1.2rem;margin-bottom:18px;}
+  .card h3{font-size:1.02rem;margin-bottom:10px;font-weight:600;}
+  .card p{color:var(--ink-dim);font-size:.9rem;}
 
-  /* ===== LANGS ===== */
   .langs{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;}
-  .lang-pill{
-    border:1px solid var(--border);border-radius:30px;padding:9px 20px;
-    font-size:.88rem;color:var(--ink-dim);display:flex;align-items:center;gap:8px;
-  }
+  .lang-pill{border:1px solid var(--border);border-radius:30px;padding:9px 20px;font-size:.86rem;color:var(--ink-dim);display:flex;align-items:center;gap:8px;}
   .lang-pill b{color:var(--ink);}
 
-  /* ===== CONTACT ===== */
-  .contact-box{
-    background:linear-gradient(135deg, var(--card), var(--bg-soft));
-    border:1px solid var(--border);border-radius:20px;padding:46px;
-    display:grid;grid-template-columns:1.2fr 1fr;gap:40px;
-  }
-  @media(max-width:760px){.contact-box{grid-template-columns:1fr;padding:32px 24px;}}
+  .contact-box{background:linear-gradient(135deg, var(--card), var(--bg-soft));border:1px solid var(--border);border-radius:20px;padding:44px;display:grid;grid-template-columns:1.2fr 1fr;gap:40px;}
+  @media(max-width:760px){.contact-box{grid-template-columns:1fr;padding:30px 22px;}}
   .contact-list{list-style:none;display:flex;flex-direction:column;gap:18px;}
-  .contact-list li{display:flex;align-items:center;gap:12px;font-size:.95rem;}
-  .contact-list .k{
-    width:38px;height:38px;border-radius:10px;background:var(--accent-soft);
-    display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;
-  }
+  .contact-list li{display:flex;align-items:center;gap:12px;font-size:.94rem;}
+  .contact-list .k{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;}
   .contact-list a:hover{color:var(--accent);}
   .contact-note{color:var(--ink-dim);font-size:.9rem;}
 
-  /* ===== POLICY ===== */
-  details{
-    border:1px solid var(--border);border-radius:12px;margin-bottom:14px;
-    background:var(--card);overflow:hidden;
-  }
-  summary{
-    padding:20px 24px;cursor:pointer;font-weight:600;font-size:1rem;
-    display:flex;align-items:center;justify-content:space-between;list-style:none;
-  }
+  details{border:1px solid var(--border);border-radius:12px;margin-bottom:14px;background:var(--card);overflow:hidden;}
+  summary{padding:20px 24px;cursor:pointer;font-weight:600;font-size:1rem;display:flex;align-items:center;justify-content:space-between;list-style:none;}
   summary::-webkit-details-marker{display:none;}
   summary:after{content:"+";font-size:1.3rem;color:var(--ink-dim);font-weight:300;}
   details[open] summary:after{content:"−";}
   .policy-body{padding:0 24px 24px;color:var(--ink-dim);font-size:.92rem;}
   .policy-body p{margin-bottom:12px;}
-  .policy-body ul{padding-right:20px;margin-bottom:12px;}
+  .policy-body ul{padding-inline-start:20px;margin-bottom:12px;}
   .policy-body li{margin-bottom:6px;}
 
-  footer{
-    border-top:1px solid var(--border);padding:40px 24px;
-    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;
-  }
-  footer .f-left{color:var(--ink-dim);font-size:.85rem;}
+  footer{border-top:1px solid var(--border);padding:36px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;}
+  footer .f-left{display:flex;align-items:center;gap:10px;color:var(--ink-dim);font-size:.82rem;}
+  footer .f-left img{height:24px;width:24px;border-radius:6px;object-fit:cover;}
   footer .f-links{display:flex;gap:22px;font-size:.85rem;color:var(--ink-dim);}
   footer .f-links a:hover{color:var(--ink);}
 </style>
@@ -169,50 +105,50 @@
 
 <header>
   <nav>
-    <div class="logo"><span class="dot"></span> DONIA LABS TECH</div>
+    <div class="logo"><img src="logo.jpg" alt="DONIA LABS TECH"> DONIA LABS TECH</div>
     <div class="navlinks">
-      <a href="#about">من نحن</a>
-      <a href="#services">الخدمات</a>
-      <a href="#contact">تواصل معنا</a>
-      <a href="#privacy">الخصوصية</a>
+      <a href="#about" data-i18n="nav_about">من نحن</a>
+      <a href="#services" data-i18n="nav_services">الخدمات</a>
+      <a href="#contact" data-i18n="nav_contact">تواصل معنا</a>
+      <a href="#privacy" data-i18n="nav_privacy">الخصوصية</a>
+    </div>
+    <div class="langswitch">
+      <button class="lang-btn" data-lang="ar" onclick="setLang('ar')">AR</button>
+      <button class="lang-btn" data-lang="fr" onclick="setLang('fr')">FR</button>
+      <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
     </div>
   </nav>
 </header>
 
-<section class="hero" style="border-top:none;padding-top:90px;">
+<section class="hero" style="border-top:none;padding-top:80px;">
   <div class="wrap">
-    <span class="eyebrow">⚡ DONIA PULSE AI — منصّة الوكلاء الذكية</span>
-    <h1>وكيل ذكاء اصطناعي يرد على عملائك في <span>واتساب</span>، على مدار الساعة</h1>
-    <p class="lead">
-      <strong>DONIA LABS TECH</strong> — مختبر الأفكار الذكية والتكنولوجيا المتقدمة — شركة تقنية تعمل اونلاين بالكامل، متخصصة فـ بناء وكلاء محادثة بالذكاء الاصطناعي للأنشطة التجارية،
-      تردّ على استفسارات الزبائن تلقائياً عبر واتساب — بالعربية، الفرنسية، والإنجليزية — بدون انتظار وبدون توقف.
+    <span class="eyebrow" data-i18n="eyebrow">⚡ DONIA PULSE AI — منصّة الوكلاء الذكية</span>
+    <h1 data-i18n="h1">وكيل ذكاء اصطناعي يرد على عملائك في واتساب، على مدار الساعة</h1>
+    <p class="lead" data-i18n="lead">
+      DONIA LABS TECH شركة تقنية تعمل اونلاين بالكامل، متخصصة فـ بناء وكلاء محادثة بالذكاء الاصطناعي يردّون على استفسارات الزبائن تلقائياً عبر واتساب — بالعربية، الفرنسية، والإنجليزية.
     </p>
     <div class="cta-row">
-      <a class="btn btn-primary" href="#contact">تواصل معنا الآن</a>
-      <a class="btn btn-ghost" href="#services">شوف الخدمات</a>
+      <a class="btn btn-primary" href="#contact" data-i18n="cta1">تواصل معنا الآن</a>
+      <a class="btn btn-ghost" href="#services" data-i18n="cta2">شوف الخدمات</a>
     </div>
-
     <div class="stat-strip">
-      <div class="stat"><b>24/7</b><span>تغطية دائمة بلا انقطاع</span></div>
-      <div class="stat"><b>AR · FR · EN</b><span>دعم متعدد اللغات</span></div>
-      <div class="stat"><b>&lt;5s</b><span>زمن الرد المتوسط</span></div>
+      <div class="stat"><b>24/7</b><span data-i18n="stat1">تغطية دائمة بلا انقطاع</span></div>
+      <div class="stat"><b>AR · FR · EN</b><span data-i18n="stat2">دعم متعدد اللغات</span></div>
+      <div class="stat"><b>&lt;5s</b><span data-i18n="stat3">زمن الرد المتوسط</span></div>
     </div>
   </div>
 </section>
 
 <section id="about">
   <div class="wrap">
-    <span class="tag">// من نحن</span>
-    <h2>منصّة واحدة، وكيل ذكي لكل نشاط تجاري</h2>
+    <span class="tag" data-i18n="tag_about">// من نحن</span>
+    <h2 data-i18n="h2_about">منصّة واحدة، وكيل ذكي لكل نشاط تجاري</h2>
     <div class="about-grid">
-      <p>
-        <strong>DONIA LABS TECH</strong> (مختبر الأفكار الذكية والتكنولوجيا المتقدمة — <strong>Smart Ideas Lab</strong>) هي الشركة المطوّرة لمنصة <strong>Donia Pulse AI</strong> —
-        نظام يربط الذكاء الاصطناعي مباشرة بحساب واتساب بيزنس الخاص بنشاطك التجاري، ليتولى الرد على
-        رسائل الزبائن، الاستفسارات، والطلبات الأساسية بشكل تلقائي وفوري.
+      <p data-i18n="about_p1">
+        <strong>DONIA LABS TECH</strong> (مختبر الأفكار الذكية والتكنولوجيا المتقدمة — <strong>Smart Ideas Lab</strong>) هي الشركة المطوّرة لمنصة <strong>Donia Pulse AI</strong> — نظام يربط الذكاء الاصطناعي مباشرة بحساب واتساب بيزنس الخاص بنشاطك التجاري.
       </p>
-      <p>
-        نعمل اونلاين بالكامل مع التجار، المتاجر الإلكترونية، ومقدّمي الخدمات فـ الوطن العربي والمنطقة الأوروبية، ونوفّر لكل عميل
-        وكيلاً مخصّصاً يحترم هوية علامته التجارية، لغته، وأسلوبه فـ التعامل مع الزبائن.
+      <p data-i18n="about_p2">
+        نعمل اونلاين بالكامل مع التجار، المتاجر الإلكترونية، ومقدّمي الخدمات فـ الوطن العربي والمنطقة الأوروبية، ونوفّر لكل عميل وكيلاً مخصّصاً يحترم هوية علامته التجارية.
       </p>
     </div>
   </div>
@@ -220,24 +156,24 @@
 
 <section id="services">
   <div class="wrap">
-    <span class="tag">// الخدمات</span>
-    <h2>كيفاش نخدمو</h2>
-    <p class="sub">كل وكيل يُبنى ويُهيّأ خصيصاً حسب نشاطك، فيه:</p>
+    <span class="tag" data-i18n="tag_services">// الخدمات</span>
+    <h2 data-i18n="h2_services">كيفاش نخدمو</h2>
+    <p class="sub" data-i18n="sub_services">كل وكيل يُبنى ويُهيّأ خصيصاً حسب نشاطك، فيه:</p>
     <div class="cards">
       <div class="card">
         <div class="ic">💬</div>
-        <h3>ردود فورية وذكية</h3>
-        <p>الوكيل يفهم سؤال الزبون ويرد عليه بأسلوب احترافي وودود، فـ ثوانٍ معدودة.</p>
+        <h3 data-i18n="card1_title">ردود فورية وذكية</h3>
+        <p data-i18n="card1_desc">الوكيل يفهم سؤال الزبون ويرد عليه بأسلوب احترافي وودود، فـ ثوانٍ معدودة.</p>
       </div>
       <div class="card">
         <div class="ic">🌍</div>
-        <h3>دعم متعدد اللغات</h3>
-        <p>يكتشف لغة الزبون تلقائياً (عربية، فرنسية، إنجليزية) ويرد بنفس اللغة.</p>
+        <h3 data-i18n="card2_title">دعم متعدد اللغات</h3>
+        <p data-i18n="card2_desc">يكتشف لغة الزبون تلقائياً (عربية، فرنسية، إنجليزية) ويرد بنفس اللغة.</p>
       </div>
       <div class="card">
         <div class="ic">🛡️</div>
-        <h3>حدود وأمان كاملين</h3>
-        <p>فلترة محتوى، منع مواضيع حساسة، وإمكانية إيقاف الخدمة فوراً فـ أي وقت.</p>
+        <h3 data-i18n="card3_title">حدود وأمان كاملين</h3>
+        <p data-i18n="card3_desc">فلترة محتوى، منع مواضيع حساسة، وإمكانية إيقاف الخدمة فوراً فـ أي وقت.</p>
       </div>
     </div>
     <div class="langs">
@@ -250,21 +186,21 @@
 
 <section id="contact">
   <div class="wrap">
-    <span class="tag">// تواصل معنا</span>
-    <h2>نحب نسمعو عن نشاطك التجاري</h2>
+    <span class="tag" data-i18n="tag_contact">// تواصل معنا</span>
+    <h2 data-i18n="h2_contact">نحب نسمعو عن نشاطك التجاري</h2>
     <div class="contact-box">
       <div>
-        <p class="contact-note" style="margin-bottom:22px;">
+        <p class="contact-note" style="margin-bottom:22px;" data-i18n="contact_intro">
           عندك نشاط تجاري وتحب تجرّب وكيل ذكاء اصطناعي على واتساب؟ ابعثلنا رسالة وفريقنا يرد عليك فـ أقرب وقت.
         </p>
         <ul class="contact-list">
-          <li><span class="k">📱</span> <a href="https://wa.me/213674661737">+213 674 661 737</a> (واتساب)</li>
-          <li><span class="k">✉️</span> <a href="mailto:contact@donialabstech.online">contact@donialabstech.online</a></li>alabs.tech</a></li>
-          <li><span class="k">🌐</span> نعمل اونلاين بالكامل — نخدم الوطن العربي والمنطقة الأوروبية</li>
+          <li><span class="k">📱</span> <a href="https://wa.me/213674661737">+213 674 661 737</a> <span data-i18n="wa_label">(واتساب)</span></li>
+          <li><span class="k">✉️</span> <a href="mailto:contact@donialabstech.online">contact@donialabstech.online</a></li>
+          <li><span class="k">🌐</span> <span data-i18n="online_label">نعمل اونلاين بالكامل — نخدم الوطن العربي والمنطقة الأوروبية</span></li>
         </ul>
       </div>
       <div>
-        <p class="contact-note">
+        <p class="contact-note" data-i18n="hours_block">
           <strong style="color:var(--ink);">ساعات الاستجابة:</strong><br>
           السبت إلى الخميس، 9:00 — 18:00<br><br>
           <strong style="color:var(--ink);">للعملاء الحاليين:</strong><br>
@@ -277,13 +213,13 @@
 
 <section id="privacy">
   <div class="wrap">
-    <span class="tag">// السياسات</span>
-    <h2>الخصوصية والشروط</h2>
-    <p class="sub">شفافية كاملة حول كيفاش نتعاملو مع بياناتك ورسائلك.</p>
+    <span class="tag" data-i18n="tag_policies">// السياسات</span>
+    <h2 data-i18n="h2_policies">الخصوصية والشروط</h2>
+    <p class="sub" data-i18n="sub_policies">شفافية كاملة حول كيفاش نتعاملو مع بياناتك ورسائلك.</p>
 
     <details open>
-      <summary>سياسة الخصوصية</summary>
-      <div class="policy-body">
+      <summary data-i18n="privacy_title">سياسة الخصوصية</summary>
+      <div class="policy-body" data-i18n="privacy_body">
         <p>تحدّث آخر مرة: 2026</p>
         <p>DONIA LABS TECH تحترم خصوصية مستخدمي خدماتها. هذه السياسة تشرح كيفاش نجمعو ونستعملو المعلومات:</p>
         <ul>
@@ -293,13 +229,13 @@
           <li>يمكن لأي نشاط تجاري طلب حذف بيانات محادثاته فـ أي وقت عبر التواصل معنا.</li>
           <li>لا نستعمل المحادثات لتدريب نماذج ذكاء اصطناعي خارجية بدون موافقة صريحة.</li>
         </ul>
-     <p>للاستفسارات حول الخصوصية: <a href="mailto:privacy@donialabstech.online">privacy@donialabstech.online</a></p>
+        <p>للاستفسارات حول الخصوصية: <a href="mailto:privacy@donialabstech.online">privacy@donialabstech.online</a></p>
       </div>
     </details>
 
     <details>
-      <summary>شروط الاستخدام</summary>
-      <div class="policy-body">
+      <summary data-i18n="terms_title">شروط الاستخدام</summary>
+      <div class="policy-body" data-i18n="terms_body">
         <p>باستخدامك لخدمات Donia Pulse AI، فإنك توافق على الشروط التالية:</p>
         <ul>
           <li>الخدمة مخصّصة للتواصل التجاري المشروع فقط (استفسارات، طلبات، دعم زبائن).</li>
@@ -313,13 +249,117 @@
 </section>
 
 <footer>
-  <div class="f-left">© 2026 DONIA LABS TECH — مختبر الأفكار الذكية والتكنولوجيا المتقدمة — جميع الحقوق محفوظة</div>
+  <div class="f-left"><img src="logo.jpg" alt="logo"> <span data-i18n="footer_copy">© 2026 DONIA LABS TECH — جميع الحقوق محفوظة</span></div>
   <div class="f-links">
-    <a href="#privacy">سياسة الخصوصية</a>
-    <a href="#privacy">الشروط</a>
-    <a href="#contact">تواصل معنا</a>
+    <a href="#privacy" data-i18n="footer_privacy">سياسة الخصوصية</a>
+    <a href="#privacy" data-i18n="footer_terms">الشروط</a>
+    <a href="#contact" data-i18n="footer_contact">تواصل معنا</a>
   </div>
 </footer>
+
+<script>
+const translations = {
+  ar: {
+    nav_about:"من نحن", nav_services:"الخدمات", nav_contact:"تواصل معنا", nav_privacy:"الخصوصية",
+    eyebrow:"⚡ DONIA PULSE AI — منصّة الوكلاء الذكية",
+    h1:"وكيل ذكاء اصطناعي يرد على عملائك في واتساب، على مدار الساعة",
+    lead:"DONIA LABS TECH شركة تقنية تعمل اونلاين بالكامل، متخصصة فـ بناء وكلاء محادثة بالذكاء الاصطناعي يردّون على استفسارات الزبائن تلقائياً عبر واتساب — بالعربية، الفرنسية، والإنجليزية.",
+    cta1:"تواصل معنا الآن", cta2:"شوف الخدمات",
+    stat1:"تغطية دائمة بلا انقطاع", stat2:"دعم متعدد اللغات", stat3:"زمن الرد المتوسط",
+    tag_about:"// من نحن", h2_about:"منصّة واحدة، وكيل ذكي لكل نشاط تجاري",
+    about_p1:"<strong>DONIA LABS TECH</strong> (مختبر الأفكار الذكية والتكنولوجيا المتقدمة — <strong>Smart Ideas Lab</strong>) هي الشركة المطوّرة لمنصة <strong>Donia Pulse AI</strong> — نظام يربط الذكاء الاصطناعي مباشرة بحساب واتساب بيزنس الخاص بنشاطك التجاري.",
+    about_p2:"نعمل اونلاين بالكامل مع التجار، المتاجر الإلكترونية، ومقدّمي الخدمات فـ الوطن العربي والمنطقة الأوروبية، ونوفّر لكل عميل وكيلاً مخصّصاً يحترم هوية علامته التجارية.",
+    tag_services:"// الخدمات", h2_services:"كيفاش نخدمو", sub_services:"كل وكيل يُبنى ويُهيّأ خصيصاً حسب نشاطك، فيه:",
+    card1_title:"ردود فورية وذكية", card1_desc:"الوكيل يفهم سؤال الزبون ويرد عليه بأسلوب احترافي وودود، فـ ثوانٍ معدودة.",
+    card2_title:"دعم متعدد اللغات", card2_desc:"يكتشف لغة الزبون تلقائياً (عربية، فرنسية، إنجليزية) ويرد بنفس اللغة.",
+    card3_title:"حدود وأمان كاملين", card3_desc:"فلترة محتوى، منع مواضيع حساسة، وإمكانية إيقاف الخدمة فوراً فـ أي وقت.",
+    tag_contact:"// تواصل معنا", h2_contact:"نحب نسمعو عن نشاطك التجاري",
+    contact_intro:"عندك نشاط تجاري وتحب تجرّب وكيل ذكاء اصطناعي على واتساب؟ ابعثلنا رسالة وفريقنا يرد عليك فـ أقرب وقت.",
+    wa_label:"(واتساب)", online_label:"نعمل اونلاين بالكامل — نخدم الوطن العربي والمنطقة الأوروبية",
+    hours_block:"<strong style='color:var(--ink);'>ساعات الاستجابة:</strong><br>السبت إلى الخميس، 9:00 — 18:00<br><br><strong style='color:var(--ink);'>للعملاء الحاليين:</strong><br>الدعم التقني متوفر عبر نفس قناة واتساب المرتبطة بحسابكم.",
+    tag_policies:"// السياسات", h2_policies:"الخصوصية والشروط", sub_policies:"شفافية كاملة حول كيفاش نتعاملو مع بياناتك ورسائلك.",
+    privacy_title:"سياسة الخصوصية",
+    privacy_body:"<p>تحدّث آخر مرة: 2026</p><p>DONIA LABS TECH تحترم خصوصية مستخدمي خدماتها. هذه السياسة تشرح كيفاش نجمعو ونستعملو المعلومات:</p><ul><li>نجمعو فقط رسائل واتساب المتبادلة بين الزبون والوكيل الذكي، لغرض الرد على الاستفسار وتحسين الخدمة.</li><li>لا نشارك بيانات الزبائن مع أي طرف ثالث لأغراض تسويقية.</li><li>بيانات كل عميل محفوظة بشكل منفصل ومشفّر فـ قاعدة بيانات آمنة (Supabase).</li><li>يمكن لأي نشاط تجاري طلب حذف بيانات محادثاته فـ أي وقت عبر التواصل معنا.</li><li>لا نستعمل المحادثات لتدريب نماذج ذكاء اصطناعي خارجية بدون موافقة صريحة.</li></ul><p>للاستفسارات حول الخصوصية: <a href='mailto:privacy@donialabstech.online'>privacy@donialabstech.online</a></p>",
+    terms_title:"شروط الاستخدام",
+    terms_body:"<p>باستخدامك لخدمات Donia Pulse AI، فإنك توافق على الشروط التالية:</p><ul><li>الخدمة مخصّصة للتواصل التجاري المشروع فقط (استفسارات، طلبات، دعم زبائن).</li><li>يُمنع استعمال الوكيل لإرسال محتوى مخالف للقانون أو سياسات واتساب/Meta.</li><li>DONIA LABS TECH تحتفظ بحق إيقاف الخدمة عن أي حساب يخالف هذه الشروط.</li><li>الاشتراكات تُجدّد شهرياً، ويمكن إلغاؤها بإشعار مسبق حسب الاتفاق التجاري.</li></ul>",
+    footer_copy:"© 2026 DONIA LABS TECH — جميع الحقوق محفوظة",
+    footer_privacy:"سياسة الخصوصية", footer_terms:"الشروط", footer_contact:"تواصل معنا"
+  },
+  fr: {
+    nav_about:"À propos", nav_services:"Services", nav_contact:"Contact", nav_privacy:"Confidentialité",
+    eyebrow:"⚡ DONIA PULSE AI — Plateforme d'agents intelligents",
+    h1:"Un agent IA qui répond à vos clients sur WhatsApp, 24h/24",
+    lead:"DONIA LABS TECH est une entreprise technologique entièrement en ligne, spécialisée dans la création d'agents conversationnels IA qui répondent automatiquement aux clients sur WhatsApp — en arabe, français et anglais.",
+    cta1:"Contactez-nous", cta2:"Voir les services",
+    stat1:"Couverture continue, sans interruption", stat2:"Support multilingue", stat3:"Temps de réponse moyen",
+    tag_about:"// À propos", h2_about:"Une plateforme, un agent intelligent pour chaque activité",
+    about_p1:"<strong>DONIA LABS TECH</strong> (Smart Ideas Lab) est l'entreprise qui développe la plateforme <strong>Donia Pulse AI</strong> — un système qui connecte l'IA directement au compte WhatsApp Business de votre entreprise.",
+    about_p2:"Nous travaillons entièrement en ligne avec des commerçants, des boutiques en ligne et des prestataires de services dans le monde arabe et en Europe, en fournissant à chaque client un agent personnalisé qui respecte son identité de marque.",
+    tag_services:"// Services", h2_services:"Comment nous travaillons", sub_services:"Chaque agent est conçu et configuré spécialement pour votre activité :",
+    card1_title:"Réponses instantanées et intelligentes", card1_desc:"L'agent comprend la question du client et répond de façon professionnelle et chaleureuse, en quelques secondes.",
+    card2_title:"Support multilingue", card2_desc:"Détecte automatiquement la langue du client (arabe, français, anglais) et répond dans la même langue.",
+    card3_title:"Sécurité et limites complètes", card3_desc:"Filtrage de contenu, blocage de sujets sensibles, et possibilité d'arrêter le service immédiatement à tout moment.",
+    tag_contact:"// Contact", h2_contact:"Parlez-nous de votre activité",
+    contact_intro:"Vous avez une entreprise et souhaitez essayer un agent IA sur WhatsApp ? Envoyez-nous un message, notre équipe vous répondra rapidement.",
+    wa_label:"(WhatsApp)", online_label:"Nous travaillons entièrement en ligne — nous servons le monde arabe et l'Europe",
+    hours_block:"<strong style='color:var(--ink);'>Horaires de réponse :</strong><br>Du samedi au jeudi, 9h00 — 18h00<br><br><strong style='color:var(--ink);'>Pour les clients actuels :</strong><br>Le support technique est disponible via le même canal WhatsApp lié à votre compte.",
+    tag_policies:"// Politiques", h2_policies:"Confidentialité et conditions", sub_policies:"Une transparence totale sur la façon dont nous traitons vos données et vos messages.",
+    privacy_title:"Politique de confidentialité",
+    privacy_body:"<p>Dernière mise à jour : 2026</p><p>DONIA LABS TECH respecte la vie privée des utilisateurs de ses services. Cette politique explique comment nous collectons et utilisons les informations :</p><ul><li>Nous collectons uniquement les messages WhatsApp échangés entre le client et l'agent intelligent, dans le but de répondre aux demandes et d'améliorer le service.</li><li>Nous ne partageons aucune donnée client avec des tiers à des fins marketing.</li><li>Les données de chaque client sont stockées séparément et chiffrées dans une base de données sécurisée (Supabase).</li><li>Toute entreprise peut demander la suppression de ses données de conversation à tout moment en nous contactant.</li><li>Nous n'utilisons pas les conversations pour entraîner des modèles d'IA externes sans consentement explicite.</li></ul><p>Pour toute question sur la confidentialité : <a href='mailto:privacy@donialabstech.online'>privacy@donialabstech.online</a></p>",
+    terms_title:"Conditions d'utilisation",
+    terms_body:"<p>En utilisant les services de Donia Pulse AI, vous acceptez les conditions suivantes :</p><ul><li>Le service est réservé à la communication commerciale légitime (demandes, commandes, support client).</li><li>Il est interdit d'utiliser l'agent pour envoyer du contenu contraire à la loi ou aux politiques WhatsApp/Meta.</li><li>DONIA LABS TECH se réserve le droit de suspendre le service de tout compte qui enfreint ces conditions.</li><li>Les abonnements sont renouvelés mensuellement et peuvent être annulés avec préavis selon l'accord commercial.</li></ul>",
+    footer_copy:"© 2026 DONIA LABS TECH — Tous droits réservés",
+    footer_privacy:"Confidentialité", footer_terms:"Conditions", footer_contact:"Contact"
+  },
+  en: {
+    nav_about:"About", nav_services:"Services", nav_contact:"Contact", nav_privacy:"Privacy",
+    eyebrow:"⚡ DONIA PULSE AI — Smart Agents Platform",
+    h1:"An AI agent that replies to your customers on WhatsApp, 24/7",
+    lead:"DONIA LABS TECH is a fully online technology company, specialized in building AI conversational agents that automatically reply to customer inquiries on WhatsApp — in Arabic, French, and English.",
+    cta1:"Contact us now", cta2:"See services",
+    stat1:"Continuous coverage, no downtime", stat2:"Multilingual support", stat3:"Average response time",
+    tag_about:"// About", h2_about:"One platform, a smart agent for every business",
+    about_p1:"<strong>DONIA LABS TECH</strong> (Smart Ideas Lab) is the company behind the <strong>Donia Pulse AI</strong> platform — a system that connects AI directly to your business's WhatsApp Business account.",
+    about_p2:"We operate fully online, working with merchants, online stores, and service providers across the Arab world and Europe, providing each client with a dedicated agent that respects their brand identity.",
+    tag_services:"// Services", h2_services:"How we work", sub_services:"Every agent is built and configured specifically for your business, with:",
+    card1_title:"Instant, smart replies", card1_desc:"The agent understands the customer's question and replies professionally and warmly, within seconds.",
+    card2_title:"Multilingual support", card2_desc:"Automatically detects the customer's language (Arabic, French, English) and replies in that same language.",
+    card3_title:"Complete safety & limits", card3_desc:"Content filtering, blocking of sensitive topics, and the ability to stop the service instantly at any time.",
+    tag_contact:"// Contact", h2_contact:"Tell us about your business",
+    contact_intro:"Do you run a business and want to try an AI agent on WhatsApp? Send us a message and our team will get back to you shortly.",
+    wa_label:"(WhatsApp)", online_label:"We operate fully online — serving the Arab world and Europe",
+    hours_block:"<strong style='color:var(--ink);'>Response hours:</strong><br>Saturday to Thursday, 9:00 AM — 6:00 PM<br><br><strong style='color:var(--ink);'>For current clients:</strong><br>Technical support is available through the same WhatsApp channel linked to your account.",
+    tag_policies:"// Policies", h2_policies:"Privacy & Terms", sub_policies:"Full transparency on how we handle your data and messages.",
+    privacy_title:"Privacy Policy",
+    privacy_body:"<p>Last updated: 2026</p><p>DONIA LABS TECH respects the privacy of its service users. This policy explains how we collect and use information:</p><ul><li>We only collect WhatsApp messages exchanged between the customer and the smart agent, for the purpose of responding to inquiries and improving the service.</li><li>We do not share customer data with any third party for marketing purposes.</li><li>Each client's data is stored separately and encrypted in a secure database (Supabase).</li><li>Any business may request deletion of its conversation data at any time by contacting us.</li><li>We do not use conversations to train external AI models without explicit consent.</li></ul><p>For privacy inquiries: <a href='mailto:privacy@donialabstech.online'>privacy@donialabstech.online</a></p>",
+    terms_title:"Terms of Use",
+    terms_body:"<p>By using Donia Pulse AI services, you agree to the following terms:</p><ul><li>The service is intended for legitimate business communication only (inquiries, orders, customer support).</li><li>Using the agent to send content that violates the law or WhatsApp/Meta policies is prohibited.</li><li>DONIA LABS TECH reserves the right to suspend service for any account that violates these terms.</li><li>Subscriptions renew monthly and may be cancelled with prior notice per the business agreement.</li></ul>",
+    footer_copy:"© 2026 DONIA LABS TECH — All rights reserved",
+    footer_privacy:"Privacy Policy", footer_terms:"Terms", footer_contact:"Contact"
+  }
+};
+
+function setLang(lang){
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var key = el.getAttribute('data-i18n');
+    if(translations[lang] && translations[lang][key] !== undefined){
+      el.innerHTML = translations[lang][key];
+    }
+  });
+  document.querySelectorAll('.lang-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-lang') === lang);
+  });
+  try{ localStorage.setItem('donia_lang', lang); }catch(e){}
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  var saved = 'ar';
+  try{ saved = localStorage.getItem('donia_lang') || 'ar'; }catch(e){}
+  setLang(saved);
+});
+</script>
 
 </body>
 </html>
